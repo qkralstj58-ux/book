@@ -147,6 +147,7 @@ const el = {
   dateText: $('dateText'), datePicker: $('datePicker'), todayBtn: $('todayBtn'),
   periodSeg: $('periodSeg'), periodLabel: $('periodLabel'),
   sIn: $('sIn'), sOut: $('sOut'), sDiff: $('sDiff'), sFixed: $('sFixed'), sVar: $('sVar'),
+  compare: $('compare'), compareTitle: $('compareTitle'), compareDiff: $('compareDiff'), bars: $('bars'),
   typeSeg: $('typeSeg'), amount: $('amount'), catChips: $('catChips'), costSeg: $('costSeg'),
   title: $('title'), memoToggle: $('memoToggle'), memo: $('memo'),
   methodLabel: $('methodLabel'), methodChips: $('methodChips'), saveBtn: $('saveBtn'),
@@ -200,7 +201,70 @@ function renderSummary() {
   el.sVar.textContent = won(variable);
   setSeg(el.periodSeg, state.period);
   [el.sIn, el.sOut, el.sDiff].forEach(fitText);
+  renderCompare();
 }
+
+/* ---------- 주별 / 월별 비교 ---------- */
+
+const COMPARE_COUNT = 6;
+
+// 선택한 날짜가 속한 기간부터 n번째 이전 기간의 [시작, 끝, 이름, 그 기간으로 이동할 날짜]
+function periodAt(n) {
+  const d = fromKey(state.date);
+  if (state.period === 'week') {
+    const day = addDays(d, -7 * n);
+    const [from, to] = weekRange(day);
+    return { from, to, day: toKey(day), label: `${fromKey(from).getMonth() + 1}/${fromKey(from).getDate()}주` };
+  }
+  const first = new Date(d.getFullYear(), d.getMonth() - n, 1);
+  const lastDate = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  const day = new Date(first.getFullYear(), first.getMonth(), Math.min(d.getDate(), lastDate));
+  const [from, to] = monthRange(first);
+  const label = first.getFullYear() === d.getFullYear() ? `${first.getMonth() + 1}월` : `${String(first.getFullYear()).slice(2)}.${first.getMonth() + 1}월`;
+  return { from, to, day: toKey(day), label };
+}
+
+function spentBetween(from, to) {
+  let sum = 0;
+  for (const r of records) if (r.type === 'expense' && r.date >= from && r.date <= to) sum += r.amount;
+  return sum;
+}
+
+function renderCompare() {
+  if (state.period === 'day') { el.compare.hidden = true; return; }
+  el.compare.hidden = false;
+  const unit = state.period === 'week' ? '주' : '달';
+  const rows = [];
+  for (let n = COMPARE_COUNT - 1; n >= 0; n--) {
+    const p = periodAt(n);
+    rows.push({ ...p, n, spent: spentBetween(p.from, p.to) });
+  }
+  const cur = rows[rows.length - 1].spent;
+  const prev = rows[rows.length - 2].spent;
+  const delta = cur - prev;
+  el.compareTitle.textContent = `최근 ${COMPARE_COUNT}${unit === '주' ? '주' : '개월'} 나간 돈`;
+  el.compareDiff.textContent = delta === 0 ? `지난${unit}${unit === '주' ? '와' : '과'} 같음` : `지난${unit}보다 ${fmtNum(delta)}원 ${delta > 0 ? '더 씀' : '덜 씀'}`;
+  el.compareDiff.className = 'compare-diff ' + (delta > 0 ? 'up' : delta < 0 ? 'down' : '');
+  const max = Math.max(...rows.map(r => r.spent), 1);
+  el.bars.innerHTML = '';
+  for (const r of rows) {
+    const li = document.createElement('li');
+    li.dataset.day = r.day;
+    li.classList.toggle('cur', r.n === 0);
+    li.innerHTML = `
+      <span class="bar-k"></span>
+      <span class="bar-track"><span class="bar-fill" style="width:${(r.spent / max) * 100}%"></span></span>
+      <span class="bar-v">${r.spent ? fmtNum(r.spent) + '원' : '-'}</span>`;
+    li.querySelector('.bar-k').textContent = r.label;
+    el.bars.appendChild(li);
+  }
+}
+
+// 막대를 누르면 그 주/달로 이동
+el.bars.addEventListener('click', e => {
+  const li = e.target.closest('li');
+  if (li && !li.classList.contains('cur')) goDate(li.dataset.day);
+});
 
 // 큰 금액이 칸을 넘으면 글자 크기를 줄여 잘리지 않게 함
 function fitText(node) {

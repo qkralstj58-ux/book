@@ -1,5 +1,5 @@
 // 앱 파일을 바꾸면 VERSION을 올려 캐시를 갱신합니다.
-const VERSION = 'ledger-v2';
+const VERSION = 'ledger-v3';
 const ASSETS = [
   './',
   'index.html',

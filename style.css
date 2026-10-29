@@ -130,6 +130,27 @@ input, textarea { font: inherit; color: inherit; }
 }
 .sum-sub b { color: var(--text); font-size: 15px; font-weight: 600; }
 
+/* 주별 / 월별 비교 */
+.compare { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.compare[hidden] { display: none; }
+.compare-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; color: var(--text-2); margin-bottom: 8px; }
+.compare-diff { font-weight: 600; color: var(--text); white-space: nowrap; }
+.compare-diff.up { color: var(--red); }
+.compare-diff.down { color: var(--income); }
+.bars { list-style: none; margin: 0; padding: 0; }
+.bars li {
+  display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 8px;
+  height: 30px; cursor: pointer; border-radius: 8px;
+}
+.bars li:active { background: var(--fill); }
+.bars li.cur { cursor: default; }
+.bar-k { font-size: 13px; color: var(--text-2); white-space: nowrap; }
+.bar-track { height: 10px; background: var(--fill); border-radius: 5px; overflow: hidden; }
+.bar-fill { display: block; height: 100%; background: #c7c7cc; border-radius: 5px; transition: width .2s; }
+.bar-v { font-size: 13px; color: var(--text-2); text-align: right; min-width: 72px; white-space: nowrap; }
+.bars li.cur .bar-k, .bars li.cur .bar-v { color: var(--text); font-weight: 700; }
+.bars li.cur .bar-fill { background: var(--blue); }
+
 /* 입력 */
 .type-seg button.on[data-v="income"] { color: var(--income); }
 .editing-banner {
