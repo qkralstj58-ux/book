@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+  <meta name="theme-color" content="#f2f2f7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="가계부">
+  <meta name="format-detection" content="telephone=no">
+  <title>가계부</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="app">
+    <!-- 날짜 -->
+    <header class="date-bar">
+      <button class="icon-btn" id="prevDay" aria-label="이전날">‹</button>
+      <div class="date-center">
+        <label class="date-title" id="dateTitle">
+          <span id="dateText"></span>
+          <input type="date" id="datePicker" aria-label="날짜 선택">
+        </label>
+        <button class="today-btn" id="todayBtn">오늘</button>
+      </div>
+      <button class="icon-btn" id="nextDay" aria-label="다음날">›</button>
+      <button class="icon-btn settings-btn" id="settingsBtn" aria-label="설정">⋯</button>
+    </header>
+
+    <!-- 요약 -->
+    <section class="card summary">
+      <div class="segmented" id="periodSeg">
+        <button data-v="day" class="on">일</button>
+        <button data-v="week">주</button>
+        <button data-v="month">월</button>
+      </div>
+      <div class="period-label" id="periodLabel"></div>
+      <div class="sum-grid">
+        <div><span class="sum-k">들어온 돈</span><span class="sum-v income" id="sIn">0원</span></div>
+        <div><span class="sum-k">나간 돈</span><span class="sum-v expense" id="sOut">0원</span></div>
+        <div><span class="sum-k">차액</span><span class="sum-v" id="sDiff">0원</span></div>
+      </div>
+      <div class="sum-sub">
+        <div><span>고정비</span><b id="sFixed">0원</b></div>
+        <div><span>변동비</span><b id="sVar">0원</b></div>
+      </div>
+    </section>
+
+    <!-- 입력 -->
+    <section class="card entry" id="entry">
+      <div class="entry-head">
+        <div class="segmented type-seg" id="typeSeg">
+          <button data-v="expense" class="on">지출</button>
+          <button data-v="income">수입</button>
+        </div>
+      </div>
+      <div class="editing-banner" id="editBanner" hidden>
+        <span>기록 수정 중</span>
+        <button id="cancelEdit">취소</button>
+      </div>
+
+      <label class="amount-box">
+        <span class="won">₩</span>
+        <input id="amount" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="0" enterkeyhint="next">
+      </label>
+
+      <div class="field expense-only">
+        <div class="field-k">분류</div>
+        <div class="chips cats" id="catChips"></div>
+      </div>
+
+      <div class="field expense-only">
+        <div class="field-k">구분</div>
+        <div class="segmented cost-seg" id="costSeg">
+          <button data-v="fixed">고정비</button>
+          <button data-v="variable" class="on">변동비</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <input id="title" class="text-in" type="text" placeholder="제목 (예: 점심, 관리비, 헬스)" autocomplete="off" enterkeyhint="done">
+      </div>
+
+      <div class="field memo-field">
+        <button class="memo-toggle" id="memoToggle">+ 메모 추가</button>
+        <textarea id="memo" class="text-in" rows="2" placeholder="메모" hidden></textarea>
+      </div>
+
+      <div class="field">
+        <div class="field-k" id="methodLabel">결제수단</div>
+        <div class="chips" id="methodChips"></div>
+      </div>
+
+      <button class="save-btn" id="saveBtn" disabled>기록하기</button>
+    </section>
+
+    <!-- 기록 -->
+    <section class="records">
+      <div class="records-head">
+        <h2 id="recordsTitle">오늘의 기록</h2>
+        <span id="recordsCount"></span>
+      </div>
+      <ul class="list" id="list"></ul>
+      <p class="empty" id="empty">아직 기록이 없습니다</p>
+    </section>
+  </main>
+
+  <!-- 액션 시트 -->
+  <div class="sheet-wrap" id="actionSheet" hidden>
+    <div class="sheet-dim" data-close></div>
+    <div class="sheet">
+      <div class="sheet-group">
+        <div class="sheet-info" id="sheetInfo"></div>
+        <button class="sheet-btn" id="sheetEdit">수정</button>
+        <button class="sheet-btn danger" id="sheetDelete">삭제</button>
+      </div>
+      <div class="sheet-group">
+        <button class="sheet-btn bold" data-close>취소</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 설정 -->
+  <div class="sheet-wrap" id="settings" hidden>
+    <div class="sheet-dim" data-close></div>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>설정</h3>
+        <button class="link-btn" data-close>완료</button>
+      </div>
+      <div class="panel-body">
+        <div class="panel-sec-title">결제수단</div>
+        <ul class="method-list" id="methodList"></ul>
+        <form class="method-add" id="methodAdd">
+          <input class="text-in" id="methodNew" type="text" placeholder="새 결제수단 이름" autocomplete="off">
+          <button class="small-btn" type="submit">추가</button>
+        </form>
+
+        <div class="panel-sec-title">데이터 백업</div>
+        <div class="panel-group">
+          <button class="row-btn" id="exportBtn">JSON 내보내기</button>
+          <button class="row-btn" id="importBtn">JSON 가져오기</button>
+          <input type="file" id="importFile" accept="application/json,.json" hidden>
+        </div>
+        <p class="panel-note" id="dataInfo"></p>
+        <p class="panel-note">데이터는 이 기기의 브라우저(IndexedDB)에만 저장됩니다. 주기적으로 내보내기로 백업해 두세요.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
