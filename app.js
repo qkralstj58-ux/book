@@ -1,9 +1,18 @@
 'use strict';
 
 const CATEGORIES = ['식비', '교통', '주거', '쇼핑', '여가', '금융', '경조사'];
+const CATEGORY_EMOJI = { 식비: '🍴', 교통: '🚌', 주거: '🏠', 쇼핑: '🛍️', 여가: '🎯', 금융: '💳', 경조사: '🎁' };
+const INCOME_EMOJI = '💰';
 const DEFAULT_CATEGORY = '식비';
 const FIXED_DEFAULT_CATEGORIES = ['주거'];
-const DEFAULT_METHODS = ['현대카드', '농협카드', '계좌', '현금·기타'];
+const DEFAULT_METHODS = {
+  expense: ['현대카드', '농협카드', '계좌', '현금·기타'],
+  income: ['농협계좌', '현금·기타'],
+};
+const TITLE_PLACEHOLDER = {
+  expense: '제목 (예: 점심, 관리비, 헬스)',
+  income: '제목 (예: 급여, 환급금)',
+};
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const SETTINGS_KEY = 'ledger.settings.v1';
 
@@ -79,8 +88,14 @@ const store = (() => {
 function loadSettings() {
   let s = {};
   try { s = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch {}
+  const m = s.methods;
+  const list = v => (Array.isArray(v) && v.length ? v : null);
   return {
-    methods: Array.isArray(s.methods) && s.methods.length ? s.methods : DEFAULT_METHODS.slice(),
+    // 예전 형식(지출/수입 공용 배열)도 지출 목록으로 이어받음
+    methods: {
+      expense: list(Array.isArray(m) ? m : m && m.expense) || DEFAULT_METHODS.expense.slice(),
+      income: list(m && m.income) || DEFAULT_METHODS.income.slice(),
+    },
     lastMethod: s.lastMethod || {},
   };
 }
@@ -138,7 +153,7 @@ const el = {
   editBanner: $('editBanner'), cancelEdit: $('cancelEdit'),
   recordsTitle: $('recordsTitle'), recordsCount: $('recordsCount'), list: $('list'), empty: $('empty'),
   actionSheet: $('actionSheet'), sheetInfo: $('sheetInfo'), sheetEdit: $('sheetEdit'), sheetDelete: $('sheetDelete'),
-  settings: $('settings'), methodList: $('methodList'), methodAdd: $('methodAdd'), methodNew: $('methodNew'),
+  settings: $('settings'), methodLists: { expense: $('methodList'), income: $('incomeMethodList') },
   exportBtn: $('exportBtn'), importBtn: $('importBtn'), importFile: $('importFile'), dataInfo: $('dataInfo'),
   toast: $('toast'),
 };
@@ -202,7 +217,11 @@ function renderList() {
     .filter(r => r.date === state.date)
     .sort((a, b) => b.createdAt - a.createdAt);
   el.recordsTitle.textContent = state.date === todayKey() ? '오늘의 기록' : `${fmtMD(state.date)} 기록`;
-  el.recordsCount.textContent = items.length ? `${items.length}건` : '';
+  let dayIn = 0, dayOut = 0;
+  for (const r of items) if (r.type === 'income') dayIn += r.amount; else dayOut += r.amount;
+  el.recordsCount.textContent = items.length
+    ? [dayIn && `수입 ${fmtNum(dayIn)}원`, dayOut && `지출 ${fmtNum(dayOut)}원`].filter(Boolean).join(' · ')
+    : '';
   el.empty.hidden = items.length > 0;
   el.list.innerHTML = '';
   for (const r of items) {
@@ -212,13 +231,18 @@ function renderList() {
     const meta = isIn
       ? ['수입', r.method].filter(Boolean).join(' · ')
       : [r.category, r.costType === 'fixed' ? '고정비' : '변동비', r.method].filter(Boolean).join(' · ');
+    const t = new Date(r.createdAt);
     li.innerHTML = `
+      <div class="r-icon">${isIn ? INCOME_EMOJI : CATEGORY_EMOJI[r.category] || '•'}</div>
       <div class="r-main">
         <div class="r-title"></div>
         <div class="r-meta"></div>
         ${r.memo ? '<div class="r-memo"></div>' : ''}
       </div>
-      <div class="r-amt ${isIn ? 'income' : ''}">${isIn ? '+' : '-'}${fmtNum(r.amount)}원</div>`;
+      <div class="r-side">
+        <div class="r-time">${pad(t.getHours())}:${pad(t.getMinutes())}</div>
+        <div class="r-amt ${isIn ? 'income' : ''}">${isIn ? '+' : '-'}${fmtNum(r.amount)}원</div>
+      </div>`;
     li.querySelector('.r-title').textContent = r.title || (isIn ? '수입' : r.category);
     li.querySelector('.r-meta').textContent = meta;
     if (r.memo) li.querySelector('.r-memo').textContent = r.memo;
@@ -234,6 +258,7 @@ function renderForm() {
   setSeg(el.costSeg, state.costType);
   for (const b of el.catChips.children) b.classList.toggle('on', b.dataset.v === state.category);
   el.methodLabel.textContent = state.type === 'income' ? '입금수단' : '결제수단';
+  el.title.placeholder = TITLE_PLACEHOLDER[state.type];
   renderMethodChips();
   el.editBanner.hidden = !state.editingId;
   el.saveBtn.textContent = state.editingId ? '수정 완료' : '기록하기';
@@ -241,9 +266,10 @@ function renderForm() {
 }
 
 function renderMethodChips() {
-  if (!settings.methods.includes(state.method)) state.method = defaultMethod(state.type);
+  const list = settings.methods[state.type];
+  if (!list.includes(state.method)) state.method = defaultMethod(state.type);
   el.methodChips.innerHTML = '';
-  for (const m of settings.methods) {
+  for (const m of list) {
     const b = document.createElement('button');
     b.type = 'button';
     b.dataset.v = m;
@@ -265,10 +291,9 @@ function setSeg(seg, v) {
 }
 
 function defaultMethod(type) {
+  const list = settings.methods[type];
   const last = settings.lastMethod[type];
-  if (last && settings.methods.includes(last)) return last;
-  if (type === 'income') return settings.methods.find(m => m.includes('계좌')) || settings.methods[0];
-  return settings.methods[0];
+  return last && list.includes(last) ? last : list[0];
 }
 
 /* ---------- 입력 ---------- */
@@ -327,12 +352,13 @@ el.methodChips.addEventListener('click', e => {
 });
 
 el.memoToggle.addEventListener('click', () => {
-  showMemo(true);
-  el.memo.focus();
+  const open = el.memo.hidden;
+  showMemo(open);
+  if (open) el.memo.focus();
 });
 function showMemo(show) {
   el.memo.hidden = !show;
-  el.memoToggle.hidden = show;
+  el.memoToggle.textContent = show ? '− 메모 닫기' : '+ 메모 추가';
 }
 
 function resetForm() {
@@ -438,9 +464,9 @@ el.sheetEdit.addEventListener('click', () => {
   state.category = r.category || DEFAULT_CATEGORY;
   state.costType = r.costType || 'variable';
   state.method = r.method;
-  if (r.method && !settings.methods.includes(r.method)) {
+  if (r.method && !settings.methods[r.type].includes(r.method)) {
     // 삭제된 결제수단이면 목록에 다시 추가해 보존
-    settings.methods.push(r.method);
+    settings.methods[r.type].push(r.method);
     saveSettings();
   }
   setAmount(r.amount);
@@ -480,43 +506,49 @@ $('settingsBtn').addEventListener('click', () => {
 });
 
 function renderSettings() {
-  el.methodList.innerHTML = '';
-  settings.methods.forEach((m, i) => {
+  for (const type of ['expense', 'income']) renderMethodList(type);
+  el.dataInfo.textContent = `저장된 기록 ${records.length.toLocaleString('ko-KR')}건`;
+}
+
+function renderMethodList(type) {
+  const list = settings.methods[type];
+  const ul = el.methodLists[type];
+  ul.innerHTML = '';
+  list.forEach((m, i) => {
     const li = document.createElement('li');
     li.innerHTML = `
-      <input type="text" aria-label="결제수단 이름">
+      <input type="text" aria-label="이름">
       <button class="mini" data-act="up" aria-label="위로" ${i === 0 ? 'disabled' : ''}>↑</button>
       <button class="mini del" data-act="del" aria-label="삭제">✕</button>`;
     const input = li.querySelector('input');
     input.value = m;
-    input.addEventListener('change', () => renameMethod(i, input.value));
+    input.addEventListener('change', () => renameMethod(type, i, input.value));
     li.querySelector('[data-act=up]').addEventListener('click', () => {
-      [settings.methods[i - 1], settings.methods[i]] = [settings.methods[i], settings.methods[i - 1]];
+      [list[i - 1], list[i]] = [list[i], list[i - 1]];
       saveSettings(); renderSettings(); renderForm();
     });
     li.querySelector('[data-act=del]').addEventListener('click', () => {
-      if (settings.methods.length <= 1) { toast('결제수단은 최소 1개가 필요합니다'); return; }
+      if (list.length <= 1) { toast('최소 1개가 필요합니다'); return; }
       if (!confirm(`'${m}'을(를) 목록에서 삭제할까요?\n기존 기록은 그대로 유지됩니다.`)) return;
-      settings.methods.splice(i, 1);
+      list.splice(i, 1);
       saveSettings(); renderSettings(); renderForm();
     });
-    el.methodList.appendChild(li);
+    ul.appendChild(li);
   });
-  const n = records.length;
-  el.dataInfo.textContent = `저장된 기록 ${n.toLocaleString('ko-KR')}건`;
 }
 
-async function renameMethod(i, name) {
+async function renameMethod(type, i, name) {
+  const list = settings.methods[type];
   name = name.trim();
-  const old = settings.methods[i];
+  const old = list[i];
   if (!name || name === old) { renderSettings(); return; }
-  if (settings.methods.includes(name)) { toast('이미 있는 이름입니다'); renderSettings(); return; }
-  settings.methods[i] = name;
-  for (const t of ['expense', 'income']) if (settings.lastMethod[t] === old) settings.lastMethod[t] = name;
-  if (state.method === old) state.method = name;
+  if (list.includes(name)) { toast('이미 있는 이름입니다'); renderSettings(); return; }
+  list[i] = name;
+  if (settings.lastMethod[type] === old) settings.lastMethod[type] = name;
+  if (state.type === type && state.method === old) state.method = name;
   saveSettings();
   // 기존 기록의 결제수단 이름도 함께 변경
-  const changed = records.filter(r => r.method === old).map(r => ({ ...r, method: name }));
+  const changed = records.filter(r => r.type === type && r.method === old).map(r => ({ ...r, method: name }));
   if (changed.length) {
     await store.putMany(changed);
     const map = new Map(changed.map(r => [r.id, r]));
@@ -526,14 +558,18 @@ async function renameMethod(i, name) {
   renderSettings();
 }
 
-el.methodAdd.addEventListener('submit', e => {
-  e.preventDefault();
-  const name = el.methodNew.value.trim();
-  if (!name) return;
-  if (settings.methods.includes(name)) { toast('이미 있는 이름입니다'); return; }
-  settings.methods.push(name);
-  el.methodNew.value = '';
-  saveSettings(); renderSettings(); renderForm();
+document.querySelectorAll('.method-add').forEach(form => {
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const list = settings.methods[form.dataset.type];
+    const input = form.querySelector('input');
+    const name = input.value.trim();
+    if (!name) return;
+    if (list.includes(name)) { toast('이미 있는 이름입니다'); return; }
+    list.push(name);
+    input.value = '';
+    saveSettings(); renderSettings(); renderForm();
+  });
 });
 
 el.exportBtn.addEventListener('click', () => {
@@ -565,13 +601,19 @@ el.importFile.addEventListener('change', async () => {
     const list = Array.isArray(data) ? data : data.records;
     if (!Array.isArray(list)) throw new Error('기록 목록을 찾을 수 없습니다');
     const valid = list.filter(r => r && r.id && /^\d{4}-\d{2}-\d{2}$/.test(r.date) && Number(r.amount) > 0 && (r.type === 'expense' || r.type === 'income'))
-      .map(r => ({ ...r, amount: Math.round(Number(r.amount)), createdAt: Number(r.createdAt) || Date.now() }));
+      .map(r => {
+        // 예전 버전 백업은 결제수단을 payment 필드에 저장함
+        const { payment, ...rest } = r;
+        return { ...rest, method: r.method || payment || '', amount: Math.round(Number(r.amount)), createdAt: Number(r.createdAt) || Date.now() };
+      });
     if (!confirm(`${valid.length}건의 기록을 가져올까요?\n같은 기록은 덮어쓰고, 나머지는 추가됩니다.`)) return;
     await store.putMany(valid);
-    if (data.settings && Array.isArray(data.settings.methods)) {
-      for (const m of data.settings.methods) if (!settings.methods.includes(m)) settings.methods.push(m);
-      saveSettings();
+    // 가져온 기록에 쓰인 결제수단이 목록에 없으면 추가
+    for (const r of valid) {
+      const list = settings.methods[r.type];
+      if (r.method && !list.includes(r.method)) list.push(r.method);
     }
+    saveSettings();
     records = await store.all();
     render();
     renderSettings();
@@ -608,7 +650,7 @@ function buildCategoryChips() {
     const b = document.createElement('button');
     b.type = 'button';
     b.dataset.v = c;
-    b.textContent = c;
+    b.innerHTML = `<span class="emoji">${CATEGORY_EMOJI[c]}</span>${c}`;
     el.catChips.appendChild(b);
   }
 }

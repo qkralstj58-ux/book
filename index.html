@@ -133,10 +133,17 @@
         <button class="link-btn" data-close>완료</button>
       </div>
       <div class="panel-body">
-        <div class="panel-sec-title">결제수단</div>
+        <div class="panel-sec-title">결제수단 (지출)</div>
         <ul class="method-list" id="methodList"></ul>
-        <form class="method-add" id="methodAdd">
-          <input class="text-in" id="methodNew" type="text" placeholder="새 결제수단 이름" autocomplete="off">
+        <form class="method-add" data-type="expense">
+          <input class="text-in" type="text" placeholder="새 결제수단 이름" autocomplete="off">
+          <button class="small-btn" type="submit">추가</button>
+        </form>
+
+        <div class="panel-sec-title">입금수단 (수입)</div>
+        <ul class="method-list" id="incomeMethodList"></ul>
+        <form class="method-add" data-type="income">
+          <input class="text-in" type="text" placeholder="새 입금수단 이름" autocomplete="off">
           <button class="small-btn" type="submit">추가</button>
         </form>
 
