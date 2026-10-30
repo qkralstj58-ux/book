@@ -145,7 +145,7 @@ const $ = id => document.getElementById(id);
 const el = {
   dateText: $('dateText'), datePicker: $('datePicker'), todayBtn: $('todayBtn'),
   periodSeg: $('periodSeg'), periodLabel: $('periodLabel'),
-  sIn: $('sIn'), sOut: $('sOut'), sDiff: $('sDiff'),
+  sIn: $('sIn'), sOut: $('sOut'),
   compare: $('compare'), compareTitle: $('compareTitle'), compareDiff: $('compareDiff'), bars: $('bars'),
   typeSeg: $('typeSeg'), amount: $('amount'), catChips: $('catChips'),
   title: $('title'), memoToggle: $('memoToggle'), memo: $('memo'),
@@ -194,15 +194,11 @@ function renderSummary() {
     if (r.date < from || r.date > to) continue;
     if (r.type === 'income') inc += r.amount; else out += r.amount;
   }
-  const diff = inc - out;
   el.periodLabel.textContent = label;
   el.sIn.textContent = won(inc);
   el.sOut.textContent = won(out);
-  el.sDiff.textContent = (diff > 0 ? '+' : '') + won(diff);
-  el.sDiff.classList.toggle('neg', diff < 0);
-  el.sDiff.classList.toggle('income', diff > 0);
   setSeg(el.periodSeg, state.period);
-  [el.sIn, el.sOut, el.sDiff].forEach(fitText);
+  [el.sIn, el.sOut].forEach(fitText);
   renderCompare();
 }
 
