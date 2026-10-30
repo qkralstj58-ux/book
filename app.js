@@ -150,6 +150,7 @@ const el = {
   dateText: $('dateText'), datePicker: $('datePicker'), todayBtn: $('todayBtn'),
   periodSeg: $('periodSeg'), periodLabel: $('periodLabel'),
   sIn: $('sIn'), sOut: $('sOut'),
+  catSum: $('catSum'), catList: $('catList'),
   compare: $('compare'), compareTitle: $('compareTitle'), compareDiff: $('compareDiff'), bars: $('bars'),
   typeSeg: $('typeSeg'), amount: $('amount'), signBtn: $('signBtn'), catChips: $('catChips'),
   title: $('title'), memoToggle: $('memoToggle'), memo: $('memo'),
@@ -203,7 +204,37 @@ function renderSummary() {
   el.sOut.textContent = won(out);
   setSeg(el.periodSeg, state.period);
   [el.sIn, el.sOut].forEach(fitText);
+  // 주/월 보기는 확인용: 입력란을 숨기고 분류별 합계를 보여 줌
+  document.body.classList.toggle('multi-day', state.period !== 'day');
   renderCompare();
+  renderCategorySum(from, to);
+}
+
+function renderCategorySum(from, to) {
+  if (state.period === 'day') { el.catSum.hidden = true; return; }
+  const sums = new Map();
+  for (const r of records) {
+    if (r.type !== 'expense' || r.date < from || r.date > to) continue;
+    sums.set(r.category, (sums.get(r.category) || 0) + r.amount);
+  }
+  const rows = [...sums].filter(([, v]) => v !== 0).sort((a, b) => b[1] - a[1]);
+  const total = rows.reduce((s, [, v]) => s + Math.max(0, v), 0);
+  el.catSum.hidden = false;
+  el.catList.innerHTML = '';
+  if (!rows.length) {
+    el.catList.innerHTML = '<li class="cat-empty">지출 기록이 없습니다</li>';
+    return;
+  }
+  for (const [cat, v] of rows) {
+    const li = document.createElement('li');
+    const pct = total && v > 0 ? Math.round((v / total) * 100) : 0;
+    li.innerHTML = `
+      <span class="cat-name">${CATEGORY_EMOJI[cat] || '•'} <span></span></span>
+      <span class="cat-pct">${pct ? pct + '%' : ''}</span>
+      <span class="cat-amt">${won(v)}</span>`;
+    li.querySelector('.cat-name span').textContent = cat || '기타';
+    el.catList.appendChild(li);
+  }
 }
 
 /* ---------- 주별 / 월별 비교 ---------- */
@@ -541,6 +572,12 @@ el.sheetEdit.addEventListener('click', () => {
   const r = records.find(x => x.id === sheetId);
   closeSheet(el.actionSheet);
   if (!r) return;
+  // 주/월 보기에는 입력란이 없으므로 그 기록의 날짜(일 보기)로 이동해 수정
+  if (state.period !== 'day') {
+    state.period = 'day';
+    state.date = r.date;
+    render();
+  }
   state.editingId = r.id;
   state.type = r.type;
   state.category = r.category || DEFAULT_CATEGORY;

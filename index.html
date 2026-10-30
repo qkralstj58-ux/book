@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
   <main class="app">
@@ -50,6 +50,12 @@
         </div>
         <ul class="bars" id="bars"></ul>
       </div>
+    </section>
+
+    <!-- 분류별 합계 (주/월) -->
+    <section class="card cat-sum" id="catSum" hidden>
+      <div class="cat-sum-head">분류별 지출</div>
+      <ul class="cat-list" id="catList"></ul>
     </section>
 
     <!-- 입력 -->
@@ -165,6 +171,6 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
 </body>
 </html>

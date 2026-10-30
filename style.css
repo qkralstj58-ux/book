@@ -138,6 +138,22 @@ input, textarea { font: inherit; color: inherit; }
 .bars li.cur .bar-k, .bars li.cur .bar-v { color: var(--text); font-weight: 700; }
 .bars li.cur .bar-fill { background: var(--blue); }
 
+/* 분류별 합계 */
+.cat-sum[hidden] { display: none; }
+body.multi-day #entry { display: none; }
+.cat-sum-head { font-size: 13px; color: var(--text-2); margin-bottom: 4px; }
+.cat-list { list-style: none; margin: 0; padding: 0; }
+.cat-list li {
+  display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px;
+  padding: 10px 0;
+  font-size: 16px;
+}
+.cat-list li + li { border-top: 1px solid var(--line); }
+.cat-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cat-pct { font-size: 13px; color: var(--text-2); min-width: 36px; text-align: right; }
+.cat-amt { font-weight: 700; white-space: nowrap; min-width: 92px; text-align: right; }
+.cat-empty { color: var(--text-3); font-size: 14px; justify-content: center; display: block !important; text-align: center; }
+
 /* 입력 */
 .type-seg button.on[data-v="income"] { color: var(--income); }
 .editing-banner {
