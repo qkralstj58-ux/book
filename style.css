@@ -117,18 +117,6 @@ input, textarea { font: inherit; color: inherit; }
 .sum-v { font-size: 18px; font-weight: 700; letter-spacing: -0.5px; white-space: nowrap; overflow: hidden; padding: 0 4px; }
 .sum-v.income { color: var(--income); }
 .sum-v.neg { color: var(--red); }
-.sum-sub {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
-  margin-top: 12px;
-}
-.sum-sub > div {
-  background: var(--fill);
-  border-radius: 10px;
-  padding: 8px 12px;
-  display: flex; justify-content: space-between; align-items: baseline;
-  font-size: 13px; color: var(--text-2);
-}
-.sum-sub b { color: var(--text); font-size: 15px; font-weight: 600; }
 
 /* 주별 / 월별 비교 */
 .compare { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
@@ -194,7 +182,6 @@ input, textarea { font: inherit; color: inherit; }
 .cats button { padding: 0; display: flex; align-items: center; justify-content: center; gap: 4px; }
 .cats .emoji { font-size: 15px; }
 
-.cost-seg button { height: 36px; }
 
 .text-in {
   width: 100%;

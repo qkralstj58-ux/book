@@ -4,7 +4,6 @@ const CATEGORIES = ['식비', '교통', '주거', '쇼핑', '여가', '금융', 
 const CATEGORY_EMOJI = { 식비: '🍴', 교통: '🚌', 주거: '🏠', 쇼핑: '🛍️', 여가: '🎯', 금융: '💳', 경조사: '🎁' };
 const INCOME_EMOJI = '💰';
 const DEFAULT_CATEGORY = '식비';
-const FIXED_DEFAULT_CATEGORIES = ['주거'];
 const DEFAULT_METHODS = {
   expense: ['현대카드', '농협카드', '계좌', '현금·기타'],
   income: ['농협계좌', '현금·기타'],
@@ -136,7 +135,6 @@ const state = {
   period: 'day',
   type: 'expense',
   category: DEFAULT_CATEGORY,
-  costType: 'variable',
   method: null,
   editingId: null,
   lastSavedId: null,
@@ -146,9 +144,9 @@ const $ = id => document.getElementById(id);
 const el = {
   dateText: $('dateText'), datePicker: $('datePicker'), todayBtn: $('todayBtn'),
   periodSeg: $('periodSeg'), periodLabel: $('periodLabel'),
-  sIn: $('sIn'), sOut: $('sOut'), sDiff: $('sDiff'), sFixed: $('sFixed'), sVar: $('sVar'),
+  sIn: $('sIn'), sOut: $('sOut'), sDiff: $('sDiff'),
   compare: $('compare'), compareTitle: $('compareTitle'), compareDiff: $('compareDiff'), bars: $('bars'),
-  typeSeg: $('typeSeg'), amount: $('amount'), catChips: $('catChips'), costSeg: $('costSeg'),
+  typeSeg: $('typeSeg'), amount: $('amount'), catChips: $('catChips'),
   title: $('title'), memoToggle: $('memoToggle'), memo: $('memo'),
   methodLabel: $('methodLabel'), methodChips: $('methodChips'), saveBtn: $('saveBtn'),
   editBanner: $('editBanner'), cancelEdit: $('cancelEdit'),
@@ -181,14 +179,10 @@ function renderSummary() {
     [from, to] = monthRange(d);
     label = `${d.getFullYear()}년 ${d.getMonth() + 1}월`;
   }
-  let inc = 0, out = 0, fixed = 0, variable = 0;
+  let inc = 0, out = 0;
   for (const r of records) {
     if (r.date < from || r.date > to) continue;
-    if (r.type === 'income') inc += r.amount;
-    else {
-      out += r.amount;
-      if (r.costType === 'fixed') fixed += r.amount; else variable += r.amount;
-    }
+    if (r.type === 'income') inc += r.amount; else out += r.amount;
   }
   const diff = inc - out;
   el.periodLabel.textContent = label;
@@ -197,8 +191,6 @@ function renderSummary() {
   el.sDiff.textContent = (diff > 0 ? '+' : '') + won(diff);
   el.sDiff.classList.toggle('neg', diff < 0);
   el.sDiff.classList.toggle('income', diff > 0);
-  el.sFixed.textContent = won(fixed);
-  el.sVar.textContent = won(variable);
   setSeg(el.periodSeg, state.period);
   [el.sIn, el.sOut, el.sDiff].forEach(fitText);
   renderCompare();
@@ -294,7 +286,7 @@ function renderList() {
     const isIn = r.type === 'income';
     const meta = isIn
       ? ['수입', r.method].filter(Boolean).join(' · ')
-      : [r.category, r.costType === 'fixed' ? '고정비' : '변동비', r.method].filter(Boolean).join(' · ');
+      : [r.category, r.method].filter(Boolean).join(' · ');
     const t = new Date(r.createdAt);
     li.innerHTML = `
       <div class="r-icon">${isIn ? INCOME_EMOJI : CATEGORY_EMOJI[r.category] || '•'}</div>
@@ -319,7 +311,6 @@ function renderList() {
 function renderForm() {
   document.body.classList.toggle('income-mode', state.type === 'income');
   setSeg(el.typeSeg, state.type);
-  setSeg(el.costSeg, state.costType);
   for (const b of el.catChips.children) b.classList.toggle('on', b.dataset.v === state.category);
   el.methodLabel.textContent = state.type === 'income' ? '입금수단' : '결제수단';
   el.title.placeholder = TITLE_PLACEHOLDER[state.type];
@@ -397,14 +388,6 @@ el.catChips.addEventListener('click', e => {
   const v = e.target.closest('button')?.dataset.v;
   if (!v) return;
   state.category = v;
-  state.costType = FIXED_DEFAULT_CATEGORIES.includes(v) ? 'fixed' : 'variable';
-  renderForm();
-});
-
-el.costSeg.addEventListener('click', e => {
-  const v = e.target.closest('button')?.dataset.v;
-  if (!v) return;
-  state.costType = v;
   renderForm();
 });
 
@@ -428,7 +411,6 @@ function showMemo(show) {
 function resetForm() {
   state.editingId = null;
   state.category = DEFAULT_CATEGORY;
-  state.costType = 'variable';
   setAmount(0);
   el.title.value = '';
   el.memo.value = '';
@@ -446,7 +428,6 @@ el.saveBtn.addEventListener('click', async () => {
     date: prev ? prev.date : state.date,
     amount,
     category: state.type === 'expense' ? state.category : null,
-    costType: state.type === 'expense' ? state.costType : null,
     title: el.title.value.trim(),
     memo: el.memo.value.trim(),
     method: state.method,
@@ -515,7 +496,7 @@ el.list.addEventListener('click', e => {
   const isIn = r.type === 'income';
   el.sheetInfo.innerHTML = '<b></b><span></span>';
   el.sheetInfo.querySelector('b').textContent = `${r.title || (isIn ? '수입' : r.category)} ${isIn ? '+' : '-'}${fmtNum(r.amount)}원`;
-  el.sheetInfo.querySelector('span').textContent = [fmtMD(r.date), isIn ? '수입' : `${r.category} · ${r.costType === 'fixed' ? '고정비' : '변동비'}`, r.method, r.memo].filter(Boolean).join(' · ');
+  el.sheetInfo.querySelector('span').textContent = [fmtMD(r.date), isIn ? '수입' : r.category, r.method, r.memo].filter(Boolean).join(' · ');
   openSheet(el.actionSheet);
 });
 
@@ -526,7 +507,6 @@ el.sheetEdit.addEventListener('click', () => {
   state.editingId = r.id;
   state.type = r.type;
   state.category = r.category || DEFAULT_CATEGORY;
-  state.costType = r.costType || 'variable';
   state.method = r.method;
   if (r.method && !settings.methods[r.type].includes(r.method)) {
     // 삭제된 결제수단이면 목록에 다시 추가해 보존
