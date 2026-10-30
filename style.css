@@ -227,6 +227,15 @@ body.income-mode .save-btn { background: var(--income); }
 }
 .list li + li { border-top: 1px solid var(--line); }
 .list li:active { background: var(--fill); }
+.list li.day-head {
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: var(--fill);
+  font-size: 13px; font-weight: 600; color: var(--text-2);
+  cursor: default;
+}
+.list li.day-head + li { border-top: 0; }
+.list li.day-head:active { background: var(--fill); }
 .list li.flash { animation: flash 1.2s ease-out; }
 @keyframes flash { from { background: #e8f1ff; } to { background: transparent; } }
 .r-icon {

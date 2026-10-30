@@ -168,19 +168,27 @@ function renderDate() {
   el.todayBtn.classList.toggle('is-today', state.date === todayKey());
 }
 
-function renderSummary() {
+// 선택한 날짜 기준 일/주/월 기간과 이름
+function currentRange() {
   const d = fromKey(state.date);
-  let from, to, label;
+  const today = todayKey();
   if (state.period === 'day') {
-    from = to = state.date;
-    label = state.date === todayKey() ? '오늘' : fmtMD(state.date);
-  } else if (state.period === 'week') {
-    [from, to] = weekRange(d);
-    label = `${fmtMD(from)} – ${fmtMD(to)}`;
-  } else {
-    [from, to] = monthRange(d);
-    label = `${d.getFullYear()}년 ${d.getMonth() + 1}월`;
+    const isToday = state.date === today;
+    return { from: state.date, to: state.date, label: isToday ? '오늘' : fmtMD(state.date), listTitle: isToday ? '오늘의 기록' : `${fmtMD(state.date)} 기록` };
   }
+  if (state.period === 'week') {
+    const [from, to] = weekRange(d);
+    const label = `${fmtMD(from)} – ${fmtMD(to)}`;
+    const isNow = today >= from && today <= to;
+    return { from, to, label, listTitle: isNow ? '이번 주 기록' : `${label} 기록` };
+  }
+  const [from, to] = monthRange(d);
+  const isNow = today >= from && today <= to;
+  return { from, to, label: `${d.getFullYear()}년 ${d.getMonth() + 1}월`, listTitle: isNow ? '이번 달 기록' : `${d.getMonth() + 1}월 기록` };
+}
+
+function renderSummary() {
+  const { from, to, label } = currentRange();
   let inc = 0, out = 0;
   for (const r of records) {
     if (r.date < from || r.date > to) continue;
@@ -271,10 +279,12 @@ function fitText(node) {
 }
 
 function renderList() {
+  const { from, to, listTitle } = currentRange();
   const items = records
-    .filter(r => r.date === state.date)
-    .sort((a, b) => b.createdAt - a.createdAt);
-  el.recordsTitle.textContent = state.date === todayKey() ? '오늘의 기록' : `${fmtMD(state.date)} 기록`;
+    .filter(r => r.date >= from && r.date <= to)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+  const multiDay = state.period !== 'day';
+  el.recordsTitle.textContent = listTitle;
   let dayIn = 0, dayOut = 0;
   for (const r of items) if (r.type === 'income') dayIn += r.amount; else dayOut += r.amount;
   el.recordsCount.textContent = items.length
@@ -282,7 +292,21 @@ function renderList() {
     : '';
   el.empty.hidden = items.length > 0;
   el.list.innerHTML = '';
+  let lastDate = null;
   for (const r of items) {
+    // 주/월 보기에서는 날짜별로 묶어 표시
+    if (multiDay && r.date !== lastDate) {
+      lastDate = r.date;
+      const head = document.createElement('li');
+      head.className = 'day-head';
+      const d = fromKey(r.date);
+      let dayIn = 0, dayOut = 0;
+      for (const x of items) if (x.date === r.date) { if (x.type === 'income') dayIn += x.amount; else dayOut += x.amount; }
+      head.innerHTML = '<span></span><span></span>';
+      head.children[0].textContent = `${fmtMD(r.date)} ${WEEKDAYS[d.getDay()]}요일${r.date === todayKey() ? ' · 오늘' : ''}`;
+      head.children[1].textContent = [dayIn && `+${fmtNum(dayIn)}원`, dayOut && `-${fmtNum(dayOut)}원`].filter(Boolean).join(' · ');
+      el.list.appendChild(head);
+    }
     const li = document.createElement('li');
     li.dataset.id = r.id;
     const isIn = r.type === 'income';
@@ -480,6 +504,7 @@ el.periodSeg.addEventListener('click', e => {
   if (!v) return;
   state.period = v;
   renderSummary();
+  renderList();
 });
 
 /* ---------- 기록 액션 시트 ---------- */
@@ -488,7 +513,7 @@ let sheetId = null;
 let deleteArmed = false;
 
 el.list.addEventListener('click', e => {
-  const li = e.target.closest('li');
+  const li = e.target.closest('li[data-id]');
   if (!li) return;
   const r = records.find(x => x.id === li.dataset.id);
   if (!r) return;
