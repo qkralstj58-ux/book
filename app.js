@@ -14,6 +14,7 @@ const TITLE_PLACEHOLDER = {
 };
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const SETTINGS_KEY = 'ledger.settings.v1';
+const APP_VERSION = '2026.10.30';
 
 /* ---------- 저장소 (IndexedDB, 실패 시 localStorage) ---------- */
 
@@ -154,6 +155,7 @@ const el = {
   actionSheet: $('actionSheet'), sheetInfo: $('sheetInfo'), sheetEdit: $('sheetEdit'), sheetDelete: $('sheetDelete'),
   settings: $('settings'), methodLists: { expense: $('methodList'), income: $('incomeMethodList') },
   exportBtn: $('exportBtn'), importBtn: $('importBtn'), importFile: $('importFile'), dataInfo: $('dataInfo'),
+  updateBtn: $('updateBtn'),
   toast: $('toast'),
 };
 
@@ -551,7 +553,7 @@ $('settingsBtn').addEventListener('click', () => {
 
 function renderSettings() {
   for (const type of ['expense', 'income']) renderMethodList(type);
-  el.dataInfo.textContent = `저장된 기록 ${records.length.toLocaleString('ko-KR')}건`;
+  el.dataInfo.textContent = `저장된 기록 ${records.length.toLocaleString('ko-KR')}건 · 앱 버전 ${APP_VERSION}`;
 }
 
 function renderMethodList(type) {
@@ -699,15 +701,52 @@ function buildCategoryChips() {
   }
 }
 
+/* ---------- 앱 업데이트 ---------- */
+
+let pendingReload = false;
+
+function formIsEmpty() {
+  return !getAmount() && !el.title.value && !el.memo.value && !state.editingId
+    && el.actionSheet.hidden && el.settings.hidden;
+}
+
+function setupUpdates() {
+  if (!('serviceWorker' in navigator) || location.protocol === 'file:') return;
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+  // 새 버전이 설치되면 바로 새로고침 (입력 중이면 앱을 벗어날 때)
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController) return;
+    if (formIsEmpty()) location.reload(); else pendingReload = true;
+  });
+  // 홈 화면 앱은 다시 열 때 새로 로드되지 않으므로 돌아올 때마다 새 버전 확인
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && pendingReload) location.reload();
+    if (document.visibilityState === 'visible') {
+      navigator.serviceWorker.getRegistration().then(r => r && r.update()).catch(() => {});
+    }
+  });
+}
+
+// 저장된 앱 파일만 지우고 다시 받음 (기록은 IndexedDB에 있어 그대로 유지)
+el.updateBtn.addEventListener('click', async () => {
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.all(regs.map(r => r.unregister()));
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => caches.delete(k)));
+  } catch {}
+  // 주소를 바꿔 브라우저 캐시에 남은 예전 화면도 피함
+  location.replace(location.pathname + '?r=' + Date.now());
+});
+
 async function init() {
   buildCategoryChips();
   state.method = defaultMethod(state.type);
   try { records = await store.all(); } catch (e) { records = []; }
   render();
   if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  }
+  setupUpdates();
 }
 
 init();

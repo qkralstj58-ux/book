@@ -13,7 +13,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
   <main class="app">
@@ -151,12 +151,18 @@
         </div>
         <p class="panel-note" id="dataInfo"></p>
         <p class="panel-note">데이터는 이 기기의 브라우저(IndexedDB)에만 저장됩니다. 주기적으로 내보내기로 백업해 두세요.</p>
+
+        <div class="panel-sec-title">앱</div>
+        <div class="panel-group">
+          <button class="row-btn" id="updateBtn">최신 버전 다시 받기</button>
+        </div>
+        <p class="panel-note">화면이 바뀌지 않을 때 누르세요. 기록은 지워지지 않습니다.</p>
       </div>
     </div>
   </div>
 
   <div class="toast" id="toast"></div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=5"></script>
 </body>
 </html>
