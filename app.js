@@ -141,6 +141,7 @@ const state = {
   category: DEFAULT_CATEGORY,
   method: null,
   negative: false,
+  openCategory: null,
   editingId: null,
   lastSavedId: null,
 };
@@ -226,16 +227,52 @@ function renderCategorySum(from, to) {
     return;
   }
   for (const [cat, v] of rows) {
+    const open = cat === state.openCategory;
     const li = document.createElement('li');
+    li.className = 'cat-row' + (open ? ' open' : '');
+    li.dataset.cat = cat;
     const pct = total && v > 0 ? Math.round((v / total) * 100) : 0;
     li.innerHTML = `
       <span class="cat-name">${CATEGORY_EMOJI[cat] || '•'} <span></span></span>
       <span class="cat-pct">${pct ? pct + '%' : ''}</span>
-      <span class="cat-amt">${won(v)}</span>`;
+      <span class="cat-amt">${won(v)}</span>
+      <span class="cat-chev">›</span>`;
     li.querySelector('.cat-name span').textContent = cat || '기타';
     el.catList.appendChild(li);
+    if (open) el.catList.appendChild(renderCategoryDetail(cat, from, to));
   }
 }
+
+// 펼친 분류의 내역 (최근 날짜 순)
+function renderCategoryDetail(cat, from, to) {
+  const wrap = document.createElement('li');
+  wrap.className = 'cat-detail';
+  const ul = document.createElement('ul');
+  const items = records
+    .filter(r => r.type === 'expense' && r.category === cat && r.date >= from && r.date <= to)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+  for (const r of items) {
+    const li = document.createElement('li');
+    li.dataset.id = r.id;
+    li.innerHTML = '<span class="cd-date"></span><span class="cd-title"></span><span class="cd-amt"></span>';
+    li.children[0].textContent = fmtMD(r.date).replace('월 ', '/').replace('일', '');
+    li.children[1].textContent = (r.amount < 0 ? '[취소·환불] ' : '') + (r.title || r.method || cat);
+    li.children[2].textContent = signedWon(recValue(r));
+    li.children[2].classList.toggle('income', recValue(r) > 0);
+    ul.appendChild(li);
+  }
+  wrap.appendChild(ul);
+  return wrap;
+}
+
+el.catList.addEventListener('click', e => {
+  const item = e.target.closest('li[data-id]');
+  if (item) { openRecordSheet(item.dataset.id); return; }
+  const row = e.target.closest('li.cat-row');
+  if (!row) return;
+  state.openCategory = state.openCategory === row.dataset.cat ? null : row.dataset.cat;
+  renderSummary();
+});
 
 /* ---------- 주별 / 월별 비교 ---------- */
 
@@ -555,8 +592,11 @@ let deleteArmed = false;
 
 el.list.addEventListener('click', e => {
   const li = e.target.closest('li[data-id]');
-  if (!li) return;
-  const r = records.find(x => x.id === li.dataset.id);
+  if (li) openRecordSheet(li.dataset.id);
+});
+
+function openRecordSheet(id) {
+  const r = records.find(x => x.id === id);
   if (!r) return;
   sheetId = r.id;
   deleteArmed = false;
@@ -566,7 +606,7 @@ el.list.addEventListener('click', e => {
   el.sheetInfo.querySelector('b').textContent = `${r.title || (isIn ? '수입' : r.category)} ${signedWon(recValue(r))}`;
   el.sheetInfo.querySelector('span').textContent = [fmtMD(r.date), !isIn && r.amount < 0 && '취소·환불', isIn ? '수입' : r.category, r.method, r.memo].filter(Boolean).join(' · ');
   openSheet(el.actionSheet);
-});
+}
 
 el.sheetEdit.addEventListener('click', () => {
   const r = records.find(x => x.id === sheetId);

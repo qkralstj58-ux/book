@@ -143,12 +143,28 @@ input, textarea { font: inherit; color: inherit; }
 body.multi-day #entry { display: none; }
 .cat-sum-head { font-size: 13px; color: var(--text-2); margin-bottom: 4px; }
 .cat-list { list-style: none; margin: 0; padding: 0; }
-.cat-list li {
-  display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 12px;
+.cat-list li.cat-row {
+  display: grid; grid-template-columns: 1fr auto auto 14px; align-items: center; gap: 12px;
   padding: 10px 0;
   font-size: 16px;
+  cursor: pointer;
 }
-.cat-list li + li { border-top: 1px solid var(--line); }
+.cat-list li.cat-row:active { opacity: .6; }
+.cat-chev { color: var(--text-3); font-size: 18px; transition: transform .15s; text-align: center; }
+.cat-row.open .cat-chev { transform: rotate(90deg); }
+.cat-detail { padding: 0 0 8px; }
+.cat-detail ul { list-style: none; margin: 0; padding: 4px 10px; background: var(--fill); border-radius: 10px; }
+.cat-detail li {
+  display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 8px;
+  padding: 9px 0; font-size: 14px; cursor: pointer;
+}
+.cat-detail li + li { border-top: 1px solid var(--fill-2); }
+.cat-detail li:active { opacity: .6; }
+.cd-date { color: var(--text-2); font-size: 13px; }
+.cd-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cd-amt { font-weight: 600; white-space: nowrap; }
+.cd-amt.income { color: var(--income); }
+.cat-list li.cat-row + li.cat-row, .cat-detail + li.cat-row { border-top: 1px solid var(--line); }
 .cat-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cat-pct { font-size: 13px; color: var(--text-2); min-width: 36px; text-align: right; }
 .cat-amt { font-weight: 700; white-space: nowrap; min-width: 92px; text-align: right; }
