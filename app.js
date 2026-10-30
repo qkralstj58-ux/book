@@ -126,6 +126,9 @@ const fmtMD = k => { const d = fromKey(k); return `${d.getMonth() + 1}월 ${d.ge
 
 const fmtNum = n => Math.abs(n).toLocaleString('ko-KR');
 const won = n => `${n < 0 ? '-' : ''}${fmtNum(n)}원`;
+const signedWon = n => `${n > 0 ? '+' : n < 0 ? '-' : ''}${fmtNum(n)}원`;
+// 기록이 잔액에 주는 영향: 수입은 +, 지출은 - (취소·환불로 음수 지출이면 +)
+const recValue = r => (r.type === 'income' ? r.amount : -r.amount);
 
 /* ---------- 상태 ---------- */
 
@@ -137,6 +140,7 @@ const state = {
   type: 'expense',
   category: DEFAULT_CATEGORY,
   method: null,
+  negative: false,
   editingId: null,
   lastSavedId: null,
 };
@@ -147,7 +151,7 @@ const el = {
   periodSeg: $('periodSeg'), periodLabel: $('periodLabel'),
   sIn: $('sIn'), sOut: $('sOut'),
   compare: $('compare'), compareTitle: $('compareTitle'), compareDiff: $('compareDiff'), bars: $('bars'),
-  typeSeg: $('typeSeg'), amount: $('amount'), catChips: $('catChips'),
+  typeSeg: $('typeSeg'), amount: $('amount'), signBtn: $('signBtn'), catChips: $('catChips'),
   title: $('title'), memoToggle: $('memoToggle'), memo: $('memo'),
   methodLabel: $('methodLabel'), methodChips: $('methodChips'), saveBtn: $('saveBtn'),
   editBanner: $('editBanner'), cancelEdit: $('cancelEdit'),
@@ -251,8 +255,8 @@ function renderCompare() {
     li.classList.toggle('cur', r.n === 0);
     li.innerHTML = `
       <span class="bar-k"></span>
-      <span class="bar-track"><span class="bar-fill" style="width:${(r.spent / max) * 100}%"></span></span>
-      <span class="bar-v">${r.spent ? fmtNum(r.spent) + '원' : '-'}</span>`;
+      <span class="bar-track"><span class="bar-fill" style="width:${Math.max(0, r.spent / max) * 100}%"></span></span>
+      <span class="bar-v">${r.spent ? won(r.spent) : '-'}</span>`;
     li.querySelector('.bar-k').textContent = r.label;
     el.bars.appendChild(li);
   }
@@ -284,7 +288,7 @@ function renderList() {
   let dayIn = 0, dayOut = 0;
   for (const r of items) if (r.type === 'income') dayIn += r.amount; else dayOut += r.amount;
   el.recordsCount.textContent = items.length
-    ? [dayIn && `수입 ${fmtNum(dayIn)}원`, dayOut && `지출 ${fmtNum(dayOut)}원`].filter(Boolean).join(' · ')
+    ? [dayIn && `수입 ${won(dayIn)}`, dayOut && `지출 ${won(dayOut)}`].filter(Boolean).join(' · ')
     : '';
   el.empty.hidden = items.length > 0;
   el.list.innerHTML = '';
@@ -300,7 +304,7 @@ function renderList() {
       for (const x of items) if (x.date === r.date) { if (x.type === 'income') dayIn += x.amount; else dayOut += x.amount; }
       head.innerHTML = '<span></span><span></span>';
       head.children[0].textContent = `${fmtMD(r.date)} ${WEEKDAYS[d.getDay()]}요일${r.date === todayKey() ? ' · 오늘' : ''}`;
-      head.children[1].textContent = [dayIn && `+${fmtNum(dayIn)}원`, dayOut && `-${fmtNum(dayOut)}원`].filter(Boolean).join(' · ');
+      head.children[1].textContent = [dayIn && signedWon(dayIn), dayOut && signedWon(-dayOut)].filter(Boolean).join(' · ');
       el.list.appendChild(head);
     }
     const li = document.createElement('li');
@@ -308,7 +312,7 @@ function renderList() {
     const isIn = r.type === 'income';
     const meta = isIn
       ? ['수입', r.method].filter(Boolean).join(' · ')
-      : [r.category, r.method].filter(Boolean).join(' · ');
+      : [r.amount < 0 && '취소·환불', r.category, r.method].filter(Boolean).join(' · ');
     const t = new Date(r.createdAt);
     li.innerHTML = `
       <div class="r-icon">${isIn ? INCOME_EMOJI : CATEGORY_EMOJI[r.category] || '•'}</div>
@@ -319,7 +323,7 @@ function renderList() {
       </div>
       <div class="r-side">
         <div class="r-time">${pad(t.getHours())}:${pad(t.getMinutes())}</div>
-        <div class="r-amt ${isIn ? 'income' : ''}">${isIn ? '+' : '-'}${fmtNum(r.amount)}원</div>
+        <div class="r-amt ${recValue(r) > 0 ? 'income' : ''}">${signedWon(recValue(r))}</div>
       </div>`;
     li.querySelector('.r-title').textContent = r.title || (isIn ? '수입' : r.category);
     li.querySelector('.r-meta').textContent = meta;
@@ -334,6 +338,9 @@ function renderForm() {
   document.body.classList.toggle('income-mode', state.type === 'income');
   setSeg(el.typeSeg, state.type);
   for (const b of el.catChips.children) b.classList.toggle('on', b.dataset.v === state.category);
+  if (state.type === 'income') state.negative = false;
+  document.body.classList.toggle('negative', state.negative);
+  el.signBtn.setAttribute('aria-pressed', String(state.negative));
   el.methodLabel.textContent = state.type === 'income' ? '입금수단' : '결제수단';
   el.title.placeholder = TITLE_PLACEHOLDER[state.type];
   renderMethodChips();
@@ -378,8 +385,10 @@ function defaultMethod(type) {
 function getAmount() {
   return Number(el.amount.value.replace(/[^0-9]/g, '')) || 0;
 }
+// 음수는 취소·환불로 표시하고 입력칸에는 절댓값만 보여 줌
 function setAmount(n) {
-  el.amount.value = n ? n.toLocaleString('ko-KR') : '';
+  state.negative = n < 0;
+  el.amount.value = n ? Math.abs(n).toLocaleString('ko-KR') : '';
   updateSaveBtn();
 }
 function updateSaveBtn() {
@@ -391,6 +400,11 @@ el.amount.addEventListener('input', () => {
   el.amount.value = digits ? Number(digits).toLocaleString('ko-KR') : '';
   updateSaveBtn();
 });
+el.signBtn.addEventListener('click', () => {
+  state.negative = !state.negative;
+  renderForm();
+});
+
 el.amount.addEventListener('keydown', e => {
   if (e.key === 'Enter') { e.preventDefault(); el.title.focus(); }
 });
@@ -440,8 +454,8 @@ function resetForm() {
 }
 
 el.saveBtn.addEventListener('click', async () => {
-  const amount = getAmount();
-  if (amount <= 0) return;
+  if (getAmount() <= 0) return;
+  const amount = state.type === 'expense' && state.negative ? -getAmount() : getAmount();
   const now = Date.now();
   const prev = state.editingId ? records.find(r => r.id === state.editingId) : null;
   const rec = {
@@ -470,7 +484,7 @@ el.saveBtn.addEventListener('click', async () => {
   resetForm();
   el.amount.blur(); el.title.blur(); el.memo.blur();
   render();
-  toast(wasEditing ? '수정했습니다' : `${won(amount)} 기록했습니다`);
+  toast(wasEditing ? '수정했습니다' : amount < 0 ? `취소·환불 ${won(-amount)} 기록했습니다` : `${won(amount)} 기록했습니다`);
 });
 
 el.cancelEdit.addEventListener('click', () => {
@@ -518,8 +532,8 @@ el.list.addEventListener('click', e => {
   el.sheetDelete.textContent = '삭제';
   const isIn = r.type === 'income';
   el.sheetInfo.innerHTML = '<b></b><span></span>';
-  el.sheetInfo.querySelector('b').textContent = `${r.title || (isIn ? '수입' : r.category)} ${isIn ? '+' : '-'}${fmtNum(r.amount)}원`;
-  el.sheetInfo.querySelector('span').textContent = [fmtMD(r.date), isIn ? '수입' : r.category, r.method, r.memo].filter(Boolean).join(' · ');
+  el.sheetInfo.querySelector('b').textContent = `${r.title || (isIn ? '수입' : r.category)} ${signedWon(recValue(r))}`;
+  el.sheetInfo.querySelector('span').textContent = [fmtMD(r.date), !isIn && r.amount < 0 && '취소·환불', isIn ? '수입' : r.category, r.method, r.memo].filter(Boolean).join(' · ');
   openSheet(el.actionSheet);
 });
 
@@ -667,7 +681,7 @@ el.importFile.addEventListener('change', async () => {
     const data = JSON.parse(await file.text());
     const list = Array.isArray(data) ? data : data.records;
     if (!Array.isArray(list)) throw new Error('기록 목록을 찾을 수 없습니다');
-    const valid = list.filter(r => r && r.id && /^\d{4}-\d{2}-\d{2}$/.test(r.date) && Number(r.amount) > 0 && (r.type === 'expense' || r.type === 'income'))
+    const valid = list.filter(r => r && r.id && /^\d{4}-\d{2}-\d{2}$/.test(r.date) && (r.type === 'expense' ? Number(r.amount) !== 0 : r.type === 'income' && Number(r.amount) > 0))
       .map(r => {
         // 예전 버전 백업은 결제수단을 payment 필드에 저장함
         const { payment, ...rest } = r;

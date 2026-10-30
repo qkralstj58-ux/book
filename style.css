@@ -148,14 +148,26 @@ input, textarea { font: inherit; color: inherit; }
 }
 .editing-banner[hidden] { display: none; }
 .editing-banner button { color: var(--blue); font-weight: 600; font-size: 14px; }
+.amount-row { display: flex; align-items: center; gap: 8px; margin: 14px 0 6px; }
 .amount-box {
+  flex: 1; min-width: 0;
   display: flex; align-items: center; gap: 8px;
-  margin: 14px 0 6px;
   padding: 6px 4px;
   border-bottom: 2px solid var(--line);
 }
 .amount-box:focus-within { border-bottom-color: var(--blue); }
-.won { font-size: 26px; font-weight: 600; color: var(--text-2); }
+.won { font-size: 26px; font-weight: 600; color: var(--text-2); white-space: nowrap; }
+.won .minus { display: none; }
+.sign-btn {
+  flex-shrink: 0;
+  height: 34px; padding: 0 12px;
+  border-radius: 17px;
+  background: var(--fill);
+  font-size: 13px; font-weight: 600; color: var(--text-2);
+}
+body.negative .sign-btn { background: var(--red); color: #fff; }
+body.negative .won .minus { display: inline; }
+body.negative .won, body.negative #amount { color: var(--red); }
 #amount {
   flex: 1; min-width: 0;
   border: 0; outline: 0; background: none;
