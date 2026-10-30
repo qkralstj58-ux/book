@@ -1,7 +1,7 @@
 'use strict';
 
-const CATEGORIES = ['식비', '교통', '주거', '쇼핑', '여가', '금융', '경조사', '업무'];
-const CATEGORY_EMOJI = { 식비: '🍴', 교통: '🚌', 주거: '🏠', 쇼핑: '🛍️', 여가: '🎯', 금융: '💳', 경조사: '🎁', 업무: '💼' };
+const CATEGORIES = ['식비', '교통', '주거', '쇼핑', '여가', '금융', '경조사', '업무', '고정비'];
+const CATEGORY_EMOJI = { 식비: '🍴', 교통: '🚌', 주거: '🏠', 쇼핑: '🛍️', 여가: '🎯', 금융: '💳', 경조사: '🎁', 업무: '💼', 고정비: '📌' };
 const INCOME_EMOJI = '💰';
 const DEFAULT_CATEGORY = '식비';
 const DEFAULT_METHODS = {
