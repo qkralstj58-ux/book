@@ -97,6 +97,7 @@ function loadSettings() {
       income: list(m && m.income) || DEFAULT_METHODS.income.slice(),
     },
     lastMethod: s.lastMethod || {},
+    breakdown: s.breakdown === 'method' ? 'method' : 'category',
   };
 }
 function saveSettings() {
@@ -141,7 +142,7 @@ const state = {
   category: DEFAULT_CATEGORY,
   method: null,
   negative: false,
-  openCategory: null,
+  openKey: null,
   editingId: null,
   lastSavedId: null,
 };
@@ -151,7 +152,7 @@ const el = {
   dateText: $('dateText'), datePicker: $('datePicker'), todayBtn: $('todayBtn'),
   periodSeg: $('periodSeg'), periodLabel: $('periodLabel'),
   sIn: $('sIn'), sOut: $('sOut'),
-  catSum: $('catSum'), catList: $('catList'),
+  catSum: $('catSum'), catList: $('catList'), breakdownSeg: $('breakdownSeg'),
   compare: $('compare'), compareTitle: $('compareTitle'), compareDiff: $('compareDiff'), bars: $('bars'),
   typeSeg: $('typeSeg'), amount: $('amount'), signBtn: $('signBtn'), catChips: $('catChips'),
   title: $('title'), memoToggle: $('memoToggle'), memo: $('memo'),
@@ -208,15 +209,24 @@ function renderSummary() {
   // 주/월 보기는 확인용: 입력란을 숨기고 분류별 합계를 보여 줌
   document.body.classList.toggle('multi-day', state.period !== 'day');
   renderCompare();
-  renderCategorySum(from, to);
+  renderBreakdown(from, to);
 }
 
-function renderCategorySum(from, to) {
+// 분류별 / 결제수단별 지출 합계 (주/월 보기)
+const BREAKDOWN = {
+  category: { key: r => r.category || '', label: k => `${CATEGORY_EMOJI[k] || '•'} ${k || '기타'}` },
+  method: { key: r => r.method || '', label: k => k || '미지정' },
+};
+
+function renderBreakdown(from, to) {
   if (state.period === 'day') { el.catSum.hidden = true; return; }
+  const mode = BREAKDOWN[settings.breakdown] ? settings.breakdown : 'category';
+  const { key, label } = BREAKDOWN[mode];
+  setSeg(el.breakdownSeg, mode);
   const sums = new Map();
   for (const r of records) {
     if (r.type !== 'expense' || r.date < from || r.date > to) continue;
-    sums.set(r.category, (sums.get(r.category) || 0) + r.amount);
+    sums.set(key(r), (sums.get(key(r)) || 0) + r.amount);
   }
   const rows = [...sums].filter(([, v]) => v !== 0).sort((a, b) => b[1] - a[1]);
   const total = rows.reduce((s, [, v]) => s + Math.max(0, v), 0);
@@ -226,37 +236,39 @@ function renderCategorySum(from, to) {
     el.catList.innerHTML = '<li class="cat-empty">지출 기록이 없습니다</li>';
     return;
   }
-  for (const [cat, v] of rows) {
-    const open = cat === state.openCategory;
+  for (const [k, v] of rows) {
+    const open = k === state.openKey;
     const li = document.createElement('li');
     li.className = 'cat-row' + (open ? ' open' : '');
-    li.dataset.cat = cat;
+    li.dataset.key = k;
     const pct = total && v > 0 ? Math.round((v / total) * 100) : 0;
     li.innerHTML = `
-      <span class="cat-name">${CATEGORY_EMOJI[cat] || '•'} <span></span></span>
+      <span class="cat-name"></span>
       <span class="cat-pct">${pct ? pct + '%' : ''}</span>
       <span class="cat-amt">${won(v)}</span>
       <span class="cat-chev">›</span>`;
-    li.querySelector('.cat-name span').textContent = cat || '기타';
+    li.querySelector('.cat-name').textContent = label(k);
     el.catList.appendChild(li);
-    if (open) el.catList.appendChild(renderCategoryDetail(cat, from, to));
+    if (open) el.catList.appendChild(renderBreakdownDetail(mode, k, from, to));
   }
 }
 
-// 펼친 분류의 내역 (최근 날짜 순)
-function renderCategoryDetail(cat, from, to) {
+// 펼친 항목의 내역 (최근 날짜 순)
+function renderBreakdownDetail(mode, k, from, to) {
   const wrap = document.createElement('li');
   wrap.className = 'cat-detail';
   const ul = document.createElement('ul');
   const items = records
-    .filter(r => r.type === 'expense' && r.category === cat && r.date >= from && r.date <= to)
+    .filter(r => r.type === 'expense' && BREAKDOWN[mode].key(r) === k && r.date >= from && r.date <= to)
     .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
   for (const r of items) {
     const li = document.createElement('li');
     li.dataset.id = r.id;
     li.innerHTML = '<span class="cd-date"></span><span class="cd-title"></span><span class="cd-amt"></span>';
     li.children[0].textContent = fmtMD(r.date).replace('월 ', '/').replace('일', '');
-    li.children[1].textContent = (r.amount < 0 ? '[취소·환불] ' : '') + (r.title || r.method || cat);
+    // 결제수단별 보기에서는 어떤 분류였는지 함께 보여 줌
+    const name = mode === 'method' ? `${CATEGORY_EMOJI[r.category] || ''} ${r.title || r.category}`.trim() : r.title || r.method || r.category;
+    li.children[1].textContent = (r.amount < 0 ? '[취소·환불] ' : '') + name;
     li.children[2].textContent = signedWon(recValue(r));
     li.children[2].classList.toggle('income', recValue(r) > 0);
     ul.appendChild(li);
@@ -265,12 +277,21 @@ function renderCategoryDetail(cat, from, to) {
   return wrap;
 }
 
+el.breakdownSeg.addEventListener('click', e => {
+  const v = e.target.closest('button')?.dataset.v;
+  if (!v || v === settings.breakdown) return;
+  settings.breakdown = v;
+  state.openKey = null;
+  saveSettings();
+  renderSummary();
+});
+
 el.catList.addEventListener('click', e => {
   const item = e.target.closest('li[data-id]');
   if (item) { openRecordSheet(item.dataset.id); return; }
   const row = e.target.closest('li.cat-row');
   if (!row) return;
-  state.openCategory = state.openCategory === row.dataset.cat ? null : row.dataset.cat;
+  state.openKey = state.openKey === row.dataset.key ? null : row.dataset.key;
   renderSummary();
 });
 

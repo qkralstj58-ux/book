@@ -141,7 +141,8 @@ input, textarea { font: inherit; color: inherit; }
 /* 분류별 합계 */
 .cat-sum[hidden] { display: none; }
 body.multi-day #entry { display: none; }
-.cat-sum-head { font-size: 13px; color: var(--text-2); margin-bottom: 4px; }
+.cat-sum-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--text-2); margin-bottom: 4px; }
+.mini-seg button { flex: none; height: 28px; padding: 0 12px; font-size: 13px; white-space: nowrap; }
 .cat-list { list-style: none; margin: 0; padding: 0; }
 .cat-list li.cat-row {
   display: grid; grid-template-columns: 1fr auto auto 14px; align-items: center; gap: 12px;
