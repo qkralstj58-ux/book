@@ -154,13 +154,14 @@ body.multi-day #entry { display: none; }
 .cat-chev { color: var(--text-3); font-size: 18px; transition: transform .15s; text-align: center; }
 .cat-row.open .cat-chev { transform: rotate(90deg); }
 .cat-detail { padding: 0 0 8px; }
-.cat-detail ul { list-style: none; margin: 0; padding: 4px 10px; background: var(--fill); border-radius: 10px; }
-.cat-detail li {
+.cat-detail > ul { list-style: none; margin: 0; padding: 4px 10px; background: var(--fill); border-radius: 10px; }
+.cat-detail > ul + ul { margin-top: 6px; }
+.cd-list li {
   display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 8px;
   padding: 9px 0; font-size: 14px; cursor: pointer;
 }
-.cat-detail li + li { border-top: 1px solid var(--fill-2); }
-.cat-detail li:active { opacity: .6; }
+.cd-list li + li { border-top: 1px solid var(--fill-2); }
+.cd-list li:active { opacity: .6; }
 .cd-date { color: var(--text-2); font-size: 13px; }
 .cd-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cd-amt { font-weight: 600; white-space: nowrap; }
@@ -168,7 +169,15 @@ body.multi-day #entry { display: none; }
 .cat-list li.cat-row + li.cat-row, .cat-detail + li.cat-row { border-top: 1px solid var(--line); }
 .cat-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cat-pct { font-size: 13px; color: var(--text-2); min-width: 36px; text-align: right; }
-.cat-amt { font-weight: 700; white-space: nowrap; min-width: 92px; text-align: right; }
+.cat-amt { font-weight: 700; white-space: nowrap; min-width: 92px; text-align: right; display: flex; flex-direction: column; line-height: 1.25; }
+.cat-amt small { font-size: 11px; font-weight: 500; color: var(--text-3); }
+.cat-amt small.up { color: var(--red); }
+.cat-amt small.down { color: var(--income); }
+.cat-sum-head small { font-size: 11px; color: var(--text-3); margin-left: 4px; }
+.cat-detail > .mini-bars { padding: 6px 10px; }
+.mini-bars li { height: 24px; cursor: default; }
+.mini-bars .bar-k, .mini-bars .bar-v { font-size: 12px; }
+.mini-bars .bar-track { height: 8px; background: #fff; }
 .cat-empty { color: var(--text-3); font-size: 14px; justify-content: center; display: block !important; text-align: center; }
 
 /* 입력 */
@@ -260,7 +269,12 @@ body.income-mode .save-btn { background: var(--income); }
   display: flex; justify-content: space-between; align-items: baseline;
   padding: 8px 4px 8px;
 }
-.records-head h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.4px; }
+.records-head h2 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.4px; display: flex; align-items: center; gap: 6px; }
+.rh-chev { display: none; color: var(--text-3); font-size: 20px; font-weight: 400; transform: rotate(90deg); transition: transform .15s; }
+.records-head.collapsible { cursor: pointer; }
+.records-head.collapsible .rh-chev { display: inline-block; }
+.records-head.collapsed .rh-chev { transform: none; }
+.list[hidden] { display: none; }
 .records-head span { font-size: 13px; color: var(--text-2); }
 .list { list-style: none; margin: 0; padding: 0; background: var(--card); border-radius: var(--radius); overflow: hidden; }
 .list:empty { display: none; }

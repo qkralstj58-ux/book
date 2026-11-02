@@ -98,6 +98,7 @@ function loadSettings() {
     },
     lastMethod: s.lastMethod || {},
     breakdown: s.breakdown === 'method' ? 'method' : 'category',
+    listOpen: s.listOpen === true,
   };
 }
 function saveSettings() {
@@ -166,7 +167,7 @@ const el = {
   dateText: $('dateText'), datePicker: $('datePicker'), todayBtn: $('todayBtn'),
   periodSeg: $('periodSeg'), periodLabel: $('periodLabel'),
   sIn: $('sIn'), sOut: $('sOut'),
-  catSum: $('catSum'), catList: $('catList'), breakdownSeg: $('breakdownSeg'),
+  catSum: $('catSum'), catList: $('catList'), breakdownSeg: $('breakdownSeg'), breakdownNote: $('breakdownNote'), recordsHead: $('recordsHead'),
   compare: $('compare'), compareTitle: $('compareTitle'), compareDiff: $('compareDiff'), bars: $('bars'),
   typeSeg: $('typeSeg'), amount: $('amount'), signBtn: $('signBtn'), catChips: $('catChips'),
   title: $('title'), memoToggle: $('memoToggle'), memo: $('memo'),
@@ -245,25 +246,39 @@ const BREAKDOWN = {
   method: { key: r => r.method || '', label: k => k || '미지정' },
 };
 
-function renderBreakdown(from, to) {
-  if (state.period === 'day') { el.catSum.hidden = true; return; }
-  const mode = BREAKDOWN[settings.breakdown] ? settings.breakdown : 'category';
-  const { key, label } = BREAKDOWN[mode];
-  setSeg(el.breakdownSeg, mode);
+function sumsByKey(key, from, to) {
   const sums = new Map();
   for (const r of records) {
     if (r.type !== 'expense' || r.date < from || r.date > to) continue;
     sums.set(key(r), (sums.get(key(r)) || 0) + r.amount);
   }
-  const rows = [...sums].filter(([, v]) => v !== 0).sort((a, b) => b[1] - a[1]);
-  const total = rows.reduce((s, [, v]) => s + Math.max(0, v), 0);
+  return sums;
+}
+
+function renderBreakdown(from, to) {
+  if (state.period === 'day') { el.catSum.hidden = true; return; }
+  const mode = BREAKDOWN[settings.breakdown] ? settings.breakdown : 'category';
+  const { key, label } = BREAKDOWN[mode];
+  setSeg(el.breakdownSeg, mode);
+  const unit = state.period === 'week' ? '지난주' : '지난달';
+  el.breakdownNote.textContent = `▲▼ ${unit} 대비`;
+  const cur = sumsByKey(key, from, to);
+  const prevPeriod = periodAt(1);
+  const prev = sumsByKey(key, prevPeriod.from, prevPeriod.to);
+  // 이번 기간이나 직전 기간에 쓴 항목을 모두 보여 줘 줄어든 것도 비교되게 함
+  const keys = [...new Set([...cur.keys(), ...prev.keys()])]
+    .filter(k => (cur.get(k) || 0) !== 0 || (prev.get(k) || 0) !== 0)
+    .sort((a, b) => (cur.get(b) || 0) - (cur.get(a) || 0) || (prev.get(b) || 0) - (prev.get(a) || 0));
+  const total = keys.reduce((s, k) => s + Math.max(0, cur.get(k) || 0), 0);
   el.catSum.hidden = false;
   el.catList.innerHTML = '';
-  if (!rows.length) {
+  if (!keys.length) {
     el.catList.innerHTML = '<li class="cat-empty">지출 기록이 없습니다</li>';
     return;
   }
-  for (const [k, v] of rows) {
+  for (const k of keys) {
+    const v = cur.get(k) || 0;
+    const diff = v - (prev.get(k) || 0);
     const open = k === state.openKey;
     const li = document.createElement('li');
     li.className = 'cat-row' + (open ? ' open' : '');
@@ -272,7 +287,7 @@ function renderBreakdown(from, to) {
     li.innerHTML = `
       <span class="cat-name"></span>
       <span class="cat-pct">${pct ? pct + '%' : ''}</span>
-      <span class="cat-amt">${won(v)}</span>
+      <span class="cat-amt">${won(v)}<small class="${diff > 0 ? 'up' : diff < 0 ? 'down' : ''}">${diff > 0 ? '▲' + fmtNum(diff) : diff < 0 ? '▼' + fmtNum(diff) : '변동 없음'}</small></span>
       <span class="cat-chev">›</span>`;
     li.querySelector('.cat-name').textContent = label(k);
     el.catList.appendChild(li);
@@ -280,27 +295,52 @@ function renderBreakdown(from, to) {
   }
 }
 
-// 펼친 항목의 내역 (최근 날짜 순)
+// 펼친 항목: 최근 기간별 추이 + 이번 기간 내역 (최근 날짜 순)
 function renderBreakdownDetail(mode, k, from, to) {
+  const { key } = BREAKDOWN[mode];
   const wrap = document.createElement('li');
   wrap.className = 'cat-detail';
-  const ul = document.createElement('ul');
-  const items = records
-    .filter(r => r.type === 'expense' && BREAKDOWN[mode].key(r) === k && r.date >= from && r.date <= to)
-    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
-  for (const r of items) {
-    const li = document.createElement('li');
-    li.dataset.id = r.id;
-    li.innerHTML = '<span class="cd-date"></span><span class="cd-title"></span><span class="cd-amt"></span>';
-    li.children[0].textContent = fmtMD(r.date).replace('월 ', '/').replace('일', '');
-    // 결제수단별 보기에서는 어떤 분류였는지 함께 보여 줌
-    const name = mode === 'method' ? `${CATEGORY_EMOJI[r.category] || ''} ${r.title || r.category}`.trim() : r.title || r.method || r.category;
-    li.children[1].textContent = (r.amount < 0 ? '[취소·환불] ' : '') + name;
-    li.children[2].textContent = signedWon(recValue(r));
-    li.children[2].classList.toggle('income', recValue(r) > 0);
-    ul.appendChild(li);
+
+  const trend = [];
+  for (let n = COMPARE_COUNT - 1; n >= 0; n--) {
+    const p = periodAt(n);
+    trend.push({ ...p, n, v: sumsByKey(key, p.from, p.to).get(k) || 0 });
   }
-  wrap.appendChild(ul);
+  const max = Math.max(...trend.map(t => t.v), 1);
+  const bars = document.createElement('ul');
+  bars.className = 'bars mini-bars';
+  for (const t of trend) {
+    const li = document.createElement('li');
+    li.classList.toggle('cur', t.n === 0);
+    li.innerHTML = `
+      <span class="bar-k"></span>
+      <span class="bar-track"><span class="bar-fill" style="width:${Math.max(0, t.v / max) * 100}%"></span></span>
+      <span class="bar-v">${t.v ? won(t.v) : '-'}</span>`;
+    li.querySelector('.bar-k').textContent = t.label;
+    bars.appendChild(li);
+  }
+  wrap.appendChild(bars);
+
+  const items = records
+    .filter(r => r.type === 'expense' && key(r) === k && r.date >= from && r.date <= to)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+  if (items.length) {
+    const ul = document.createElement('ul');
+    ul.className = 'cd-list';
+    for (const r of items) {
+      const li = document.createElement('li');
+      li.dataset.id = r.id;
+      li.innerHTML = '<span class="cd-date"></span><span class="cd-title"></span><span class="cd-amt"></span>';
+      li.children[0].textContent = fmtMD(r.date).replace('월 ', '/').replace('일', '');
+      // 결제수단별 보기에서는 어떤 분류였는지 함께 보여 줌
+      const name = mode === 'method' ? `${CATEGORY_EMOJI[r.category] || ''} ${r.title || r.category}`.trim() : r.title || r.method || r.category;
+      li.children[1].textContent = (r.amount < 0 ? '[취소·환불] ' : '') + name;
+      li.children[2].textContent = signedWon(recValue(r));
+      li.children[2].classList.toggle('income', recValue(r) > 0);
+      ul.appendChild(li);
+    }
+    wrap.appendChild(ul);
+  }
   return wrap;
 }
 
@@ -405,7 +445,12 @@ function renderList() {
   el.recordsCount.textContent = items.length
     ? [dayIn && `수입 ${won(dayIn)}`, dayOut && `지출 ${won(dayOut)}`].filter(Boolean).join(' · ')
     : '';
-  el.empty.hidden = items.length > 0;
+  // 주/월 보기의 기록 목록은 접고 펼 수 있음 (상태 기억)
+  const collapsed = multiDay && !settings.listOpen;
+  el.recordsHead.classList.toggle('collapsible', multiDay);
+  el.recordsHead.classList.toggle('collapsed', collapsed);
+  el.list.hidden = collapsed;
+  el.empty.hidden = collapsed || items.length > 0;
   el.list.innerHTML = '';
   let lastDate = null;
   for (const r of items) {
@@ -644,6 +689,13 @@ el.periodSeg.addEventListener('click', e => {
 
 let sheetId = null;
 let deleteArmed = false;
+
+el.recordsHead.addEventListener('click', () => {
+  if (state.period === 'day') return;
+  settings.listOpen = !settings.listOpen;
+  saveSettings();
+  renderList();
+});
 
 el.list.addEventListener('click', e => {
   const li = e.target.closest('li[data-id]');
