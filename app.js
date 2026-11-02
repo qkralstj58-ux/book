@@ -123,6 +123,20 @@ function monthRange(d) {
 }
 const fmtMD = k => { const d = fromKey(k); return `${d.getMonth() + 1}월 ${d.getDate()}일`; };
 
+// n개월 이동 (31일 → 다음 달 말일처럼 날짜는 그 달 안으로 맞춤)
+function addMonths(d, n) {
+  const first = new Date(d.getFullYear(), d.getMonth() + n, 1);
+  const last = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
+  return new Date(first.getFullYear(), first.getMonth(), Math.min(d.getDate(), last));
+}
+
+// 주 이름: 그 주 목요일이 속한 달의 몇째 주 (월요일 시작)
+const WEEK_ORDINALS = ['첫째', '둘째', '셋째', '넷째', '다섯째'];
+function weekName(fromKeyStr) {
+  const thu = addDays(fromKey(fromKeyStr), 3);
+  return { year: thu.getFullYear(), month: thu.getMonth() + 1, name: `${thu.getMonth() + 1}월 ${WEEK_ORDINALS[Math.ceil(thu.getDate() / 7) - 1]} 주` };
+}
+
 /* ---------- 숫자 ---------- */
 
 const fmtNum = n => Math.abs(n).toLocaleString('ko-KR');
@@ -170,9 +184,22 @@ const el = {
 
 function renderDate() {
   const d = fromKey(state.date);
-  el.dateText.textContent = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 ${WEEKDAYS[d.getDay()]}요일`;
+  const { from, to } = currentRange();
+  const today = todayKey();
+  if (state.period === 'week') {
+    const w = weekName(from);
+    el.dateText.textContent = `${w.year}년 ${w.name}`;
+  } else if (state.period === 'month') {
+    el.dateText.textContent = `${d.getFullYear()}년 ${d.getMonth() + 1}월`;
+  } else {
+    el.dateText.textContent = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 ${WEEKDAYS[d.getDay()]}요일`;
+  }
   el.datePicker.value = state.date;
-  el.todayBtn.classList.toggle('is-today', state.date === todayKey());
+  el.todayBtn.textContent = { day: '오늘', week: '이번 주', month: '이번 달' }[state.period];
+  el.todayBtn.classList.toggle('is-today', today >= from && today <= to);
+  const unit = { day: '날', week: '주', month: '달' }[state.period];
+  $('prevDay').setAttribute('aria-label', `이전 ${unit}`);
+  $('nextDay').setAttribute('aria-label', `다음 ${unit}`);
 }
 
 // 선택한 날짜 기준 일/주/월 기간과 이름
@@ -187,11 +214,11 @@ function currentRange() {
     const [from, to] = weekRange(d);
     const label = `${fmtMD(from)} – ${fmtMD(to)}`;
     const isNow = today >= from && today <= to;
-    return { from, to, label, listTitle: isNow ? '이번 주 기록' : `${label} 기록` };
+    return { from, to, label, listTitle: isNow ? '이번 주 기록' : `${weekName(from).name} 기록` };
   }
   const [from, to] = monthRange(d);
   const isNow = today >= from && today <= to;
-  return { from, to, label: `${d.getFullYear()}년 ${d.getMonth() + 1}월`, listTitle: isNow ? '이번 달 기록' : `${d.getMonth() + 1}월 기록` };
+  return { from, to, label: `${fmtMD(from)} – ${fmtMD(to)}`, listTitle: isNow ? '이번 달 기록' : `${d.getMonth() + 1}월 기록` };
 }
 
 function renderSummary() {
@@ -305,11 +332,10 @@ function periodAt(n) {
   if (state.period === 'week') {
     const day = addDays(d, -7 * n);
     const [from, to] = weekRange(day);
-    return { from, to, day: toKey(day), label: `${fromKey(from).getMonth() + 1}/${fromKey(from).getDate()}주` };
+    return { from, to, day: toKey(day), label: weekName(from).name };
   }
-  const first = new Date(d.getFullYear(), d.getMonth() - n, 1);
-  const lastDate = new Date(first.getFullYear(), first.getMonth() + 1, 0).getDate();
-  const day = new Date(first.getFullYear(), first.getMonth(), Math.min(d.getDate(), lastDate));
+  const day = addMonths(d, -n);
+  const first = new Date(day.getFullYear(), day.getMonth(), 1);
   const [from, to] = monthRange(first);
   const label = first.getFullYear() === d.getFullYear() ? `${first.getMonth() + 1}월` : `${String(first.getFullYear()).slice(2)}.${first.getMonth() + 1}월`;
   return { from, to, day: toKey(day), label };
@@ -590,8 +616,15 @@ function goDate(key) {
   if (state.editingId) { resetForm(); }
   render();
 }
-$('prevDay').addEventListener('click', () => goDate(toKey(addDays(fromKey(state.date), -1))));
-$('nextDay').addEventListener('click', () => goDate(toKey(addDays(fromKey(state.date), 1))));
+// 일/주/월 보기에 따라 하루, 한 주, 한 달씩 이동
+function stepDate(dir) {
+  const d = fromKey(state.date);
+  if (state.period === 'week') return goDate(toKey(addDays(d, 7 * dir)));
+  if (state.period === 'month') return goDate(toKey(addMonths(d, dir)));
+  goDate(toKey(addDays(d, dir)));
+}
+$('prevDay').addEventListener('click', () => stepDate(-1));
+$('nextDay').addEventListener('click', () => stepDate(1));
 el.todayBtn.addEventListener('click', () => goDate(todayKey()));
 el.datePicker.addEventListener('change', () => goDate(el.datePicker.value));
 el.datePicker.addEventListener('click', () => {
@@ -602,6 +635,7 @@ el.periodSeg.addEventListener('click', e => {
   const v = e.target.closest('button')?.dataset.v;
   if (!v) return;
   state.period = v;
+  renderDate();
   renderSummary();
   renderList();
 });
