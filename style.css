@@ -42,7 +42,7 @@ input, textarea { font: inherit; color: inherit; }
 .date-bar {
   display: grid;
   grid-template-columns: 44px 1fr 44px 36px;
-  align-items: center;
+  align-items: end;
   gap: 4px;
   padding: 4px 0 10px;
 }
