@@ -196,7 +196,8 @@ function renderDate() {
     el.dateText.textContent = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 ${WEEKDAYS[d.getDay()]}요일`;
   }
   el.datePicker.value = state.date;
-  el.todayBtn.textContent = { day: '오늘', week: '이번 주', month: '이번 달' }[state.period];
+  // 오늘(이번 주/달)을 보고 있을 때는 숨기고, 다른 날을 볼 때만 돌아가는 버튼으로 보여 줌
+  el.todayBtn.textContent = { day: '↩ 오늘로 이동', week: '↩ 이번 주로 이동', month: '↩ 이번 달로 이동' }[state.period];
   el.todayBtn.classList.toggle('is-today', today >= from && today <= to);
   const unit = { day: '날', week: '주', month: '달' }[state.period];
   $('prevDay').setAttribute('aria-label', `이전 ${unit}`);
