@@ -68,6 +68,7 @@ svg { display: block; }
 
 .app {
   max-width: 480px;
+  will-change: transform;
   margin: 0 auto;
   padding: calc(env(safe-area-inset-top) + 10px) 16px calc(env(safe-area-inset-bottom) + 40px);
 }

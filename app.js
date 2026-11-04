@@ -701,6 +701,64 @@ function stepDate(dir) {
 $('prevDay').addEventListener('click', () => stepDate(-1));
 $('nextDay').addEventListener('click', () => stepDate(1));
 el.todayBtn.addEventListener('click', () => goDate(todayKey()));
+
+/* ---------- 좌우 스와이프로 이전/다음 날·주·달 ---------- */
+
+(() => {
+  const app = document.querySelector('.app');
+  const THRESHOLD = 70;
+  let start = null; // { x, y, t }
+  let horizontal = null; // 방향이 정해지기 전 null
+  let busy = false;
+
+  // 입력란·시트 위에서 시작한 터치, 화면 가장자리(사파리 뒤로 가기)는 무시
+  const ignore = e => e.target.closest('#entry, input, textarea, .sheet-wrap')
+    || e.touches[0].clientX < 16 || e.touches[0].clientX > window.innerWidth - 16;
+
+  function setX(dx, animate) {
+    app.style.transition = animate ? 'transform .22s cubic-bezier(.2, .9, .3, 1), opacity .22s' : 'none';
+    app.style.transform = dx ? `translateX(${dx}px)` : '';
+    app.style.opacity = dx ? String(Math.max(.4, 1 - Math.abs(dx) / 600)) : '';
+  }
+
+  app.addEventListener('touchstart', e => {
+    if (busy || e.touches.length !== 1 || ignore(e)) { start = null; return; }
+    start = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() };
+    horizontal = null;
+  }, { passive: true });
+
+  app.addEventListener('touchmove', e => {
+    if (!start) return;
+    const dx = e.touches[0].clientX - start.x;
+    const dy = e.touches[0].clientY - start.y;
+    if (horizontal === null && Math.hypot(dx, dy) > 10) horizontal = Math.abs(dx) > Math.abs(dy) * 1.3;
+    if (!horizontal) return;
+    e.preventDefault(); // 가로로 미는 동안에는 세로 스크롤 막기
+    setX(dx * 0.6, false);
+  }, { passive: false });
+
+  app.addEventListener('touchend', e => {
+    if (!start || !horizontal) { start = null; return; }
+    const dx = e.changedTouches[0].clientX - start.x;
+    const fast = Math.abs(dx) > 30 && Date.now() - start.t < 250;
+    start = null;
+    if (Math.abs(dx) < THRESHOLD && !fast) { setX(0, true); return; }
+    // 왼쪽으로 밀면 다음, 오른쪽으로 밀면 이전
+    const dir = dx < 0 ? 1 : -1;
+    busy = true;
+    setX(-dir * window.innerWidth * 0.5, true);
+    setTimeout(() => {
+      stepDate(dir);
+      setX(dir * window.innerWidth * 0.3, false);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        setX(0, true);
+        setTimeout(() => { busy = false; app.style.transition = ''; }, 230);
+      }));
+    }, 170);
+  });
+
+  app.addEventListener('touchcancel', () => { if (start) setX(0, true); start = null; });
+})();
 el.datePicker.addEventListener('change', () => goDate(el.datePicker.value));
 el.datePicker.addEventListener('click', () => {
   try { el.datePicker.showPicker && el.datePicker.showPicker(); } catch {}
