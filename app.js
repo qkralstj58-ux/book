@@ -711,8 +711,9 @@ el.todayBtn.addEventListener('click', () => goDate(todayKey()));
   let horizontal = null; // 방향이 정해지기 전 null
   let busy = false;
 
-  // 입력란·시트 위에서 시작한 터치, 화면 가장자리(사파리 뒤로 가기)는 무시
-  const ignore = e => e.target.closest('#entry, input, textarea, .sheet-wrap')
+  // 무시: 글자 입력 중인 칸, 기록 수정 중(날짜를 옮기면 수정이 취소됨), 시트, 화면 가장자리(사파리 뒤로 가기)
+  const ignore = e => (e.target.closest('input, textarea') && e.target === document.activeElement)
+    || state.editingId || e.target.closest('.sheet-wrap')
     || e.touches[0].clientX < 16 || e.touches[0].clientX > window.innerWidth - 16;
 
   function setX(dx, animate) {
