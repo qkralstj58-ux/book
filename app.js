@@ -1,16 +1,21 @@
 'use strict';
 
 const CATEGORIES = ['식비', '교통', '주거', '쇼핑', '여가', '금융', '경조사', '업무', '고정비'];
-const CATEGORY_EMOJI = { 식비: '🍴', 교통: '🚌', 주거: '🏠', 쇼핑: '🛍️', 여가: '🎯', 금융: '💳', 경조사: '🎁', 업무: '💼', 고정비: '📌' };
-const INCOME_EMOJI = '💰';
+// 분류별 색 (애플 시스템 색상 계열)
+const CATEGORY_COLOR = {
+  식비: '#FF9500', 교통: '#007AFF', 주거: '#A2845E', 쇼핑: '#FF2D55', 여가: '#AF52DE',
+  금융: '#5856D6', 경조사: '#FF3B30', 업무: '#8E8E93', 고정비: '#30B0C7',
+};
+const INCOME_COLOR = '#34C759';
+const METHOD_COLORS = ['#0A84FF', '#34C759', '#FF9500', '#AF52DE', '#FF2D55', '#30B0C7', '#8E8E93'];
 const DEFAULT_CATEGORY = '식비';
 const DEFAULT_METHODS = {
   expense: ['현대카드', '농협카드', '계좌', '현금·기타'],
   income: ['농협계좌', '현금·기타'],
 };
 const TITLE_PLACEHOLDER = {
-  expense: '제목 (예: 점심, 관리비, 헬스)',
-  income: '제목 (예: 급여, 환급금)',
+  expense: '무엇에 썼나요?',
+  income: '어디서 들어왔나요?',
 };
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
 const SETTINGS_KEY = 'ledger.settings.v1';
@@ -135,13 +140,21 @@ function addMonths(d, n) {
 const WEEK_ORDINALS = ['첫째', '둘째', '셋째', '넷째', '다섯째'];
 function weekName(fromKeyStr) {
   const thu = addDays(fromKey(fromKeyStr), 3);
-  return { year: thu.getFullYear(), month: thu.getMonth() + 1, name: `${thu.getMonth() + 1}월 ${WEEK_ORDINALS[Math.ceil(thu.getDate() / 7) - 1]} 주` };
+  const ord = `${WEEK_ORDINALS[Math.ceil(thu.getDate() / 7) - 1]} 주`;
+  return { year: thu.getFullYear(), month: thu.getMonth() + 1, ord, name: `${thu.getMonth() + 1}월 ${ord}` };
 }
 
 /* ---------- 숫자 ---------- */
 
 const fmtNum = n => Math.abs(n).toLocaleString('ko-KR');
 const won = n => `${n < 0 ? '-' : ''}${fmtNum(n)}원`;
+// 좁은 곳에 쓰는 짧은 금액: 9,500 / 1.5만 / 14만
+function compactWon(n) {
+  const a = Math.abs(n);
+  if (a < 10000) return (n < 0 ? '-' : '') + a.toLocaleString('ko-KR');
+  const man = a / 10000;
+  return (n < 0 ? '-' : '') + (man < 10 ? Math.round(man * 10) / 10 : Math.round(man)).toLocaleString('ko-KR') + '만';
+}
 const signedWon = n => `${n > 0 ? '+' : n < 0 ? '-' : ''}${fmtNum(n)}원`;
 // 기록이 잔액에 주는 영향: 수입은 +, 지출은 - (취소·환불로 음수 지출이면 +)
 const recValue = r => (r.type === 'income' ? r.amount : -r.amount);
@@ -164,8 +177,8 @@ const state = {
 
 const $ = id => document.getElementById(id);
 const el = {
-  dateText: $('dateText'), datePicker: $('datePicker'), todayBtn: $('todayBtn'),
-  periodSeg: $('periodSeg'), periodLabel: $('periodLabel'),
+  dateText: $('dateText'), datePicker: $('datePicker'), todayBtn: $('todayBtn'), eyebrow: $('eyebrow'),
+  periodSeg: $('periodSeg'), stack: $('stack'),
   sIn: $('sIn'), sOut: $('sOut'),
   catSum: $('catSum'), catList: $('catList'), breakdownSeg: $('breakdownSeg'), breakdownNote: $('breakdownNote'), recordsHead: $('recordsHead'),
   compare: $('compare'), compareTitle: $('compareTitle'), compareDiff: $('compareDiff'), bars: $('bars'),
@@ -181,24 +194,32 @@ const el = {
   toast: $('toast'),
 };
 
+const CHEVRON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
+
 /* ---------- 렌더링 ---------- */
 
 function renderDate() {
   const d = fromKey(state.date);
   const { from, to } = currentRange();
   const today = todayKey();
+  const isNow = today >= from && today <= to;
+  const thisYear = new Date().getFullYear();
+  // 큰 제목 + 그 위의 작은 보조 줄 (올해가 아니면 연도 표시)
   if (state.period === 'week') {
     const w = weekName(from);
-    el.dateText.textContent = `${w.year}년 ${w.name}`;
+    el.dateText.textContent = w.name;
+    el.eyebrow.textContent = [w.year !== thisYear && `${w.year}년`, isNow ? '이번 주' : `${fmtMD(from)} – ${fmtMD(to)}`].filter(Boolean).join(' · ');
   } else if (state.period === 'month') {
-    el.dateText.textContent = `${d.getFullYear()}년 ${d.getMonth() + 1}월`;
+    el.dateText.textContent = `${d.getMonth() + 1}월`;
+    el.eyebrow.textContent = [`${d.getFullYear()}년`, isNow && '이번 달'].filter(Boolean).join(' · ');
   } else {
-    el.dateText.textContent = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 ${WEEKDAYS[d.getDay()]}요일`;
+    el.dateText.textContent = `${d.getMonth() + 1}월 ${d.getDate()}일`;
+    el.eyebrow.textContent = [d.getFullYear() !== thisYear && `${d.getFullYear()}년`, isNow && '오늘', `${WEEKDAYS[d.getDay()]}요일`].filter(Boolean).join(' · ');
   }
   el.datePicker.value = state.date;
   // 오늘(이번 주/달)을 보고 있을 때는 숨기고, 다른 날을 볼 때만 돌아가는 버튼으로 보여 줌
-  el.todayBtn.textContent = { day: '↩ 오늘로 이동', week: '↩ 이번 주로 이동', month: '↩ 이번 달로 이동' }[state.period];
-  el.todayBtn.classList.toggle('is-today', today >= from && today <= to);
+  el.todayBtn.textContent = { day: '오늘로', week: '이번 주로', month: '이번 달로' }[state.period];
+  el.todayBtn.hidden = isNow;
   const unit = { day: '날', week: '주', month: '달' }[state.period];
   $('prevDay').setAttribute('aria-label', `이전 ${unit}`);
   $('nextDay').setAttribute('aria-label', `다음 ${unit}`);
@@ -224,17 +245,17 @@ function currentRange() {
 }
 
 function renderSummary() {
-  const { from, to, label } = currentRange();
+  const { from, to } = currentRange();
   let inc = 0, out = 0;
   for (const r of records) {
     if (r.date < from || r.date > to) continue;
     if (r.type === 'income') inc += r.amount; else out += r.amount;
   }
-  el.periodLabel.textContent = label;
+  el.sOut.innerHTML = `${out < 0 ? '-' : ''}${fmtNum(out)}<span class="unit">원</span>`;
   el.sIn.textContent = won(inc);
-  el.sOut.textContent = won(out);
+  el.sIn.classList.toggle('pos', inc > 0);
   setSeg(el.periodSeg, state.period);
-  [el.sIn, el.sOut].forEach(fitText);
+  fitText(el.sOut);
   // 주/월 보기는 확인용: 입력란을 숨기고 분류별 합계를 보여 줌
   document.body.classList.toggle('multi-day', state.period !== 'day');
   renderCompare();
@@ -243,8 +264,11 @@ function renderSummary() {
 
 // 분류별 / 결제수단별 지출 합계 (주/월 보기)
 const BREAKDOWN = {
-  category: { key: r => r.category || '', label: k => `${CATEGORY_EMOJI[k] || '•'} ${k || '기타'}` },
-  method: { key: r => r.method || '', label: k => k || '미지정' },
+  category: { key: r => r.category || '', label: k => k || '기타', color: k => CATEGORY_COLOR[k] || '#8E8E93' },
+  method: {
+    key: r => r.method || '', label: k => k || '미지정',
+    color: k => { const i = [...settings.methods.expense, ...settings.methods.income].indexOf(k); return METHOD_COLORS[(i < 0 ? 6 : i) % METHOD_COLORS.length]; },
+  },
 };
 
 function sumsByKey(key, from, to) {
@@ -259,10 +283,9 @@ function sumsByKey(key, from, to) {
 function renderBreakdown(from, to) {
   if (state.period === 'day') { el.catSum.hidden = true; return; }
   const mode = BREAKDOWN[settings.breakdown] ? settings.breakdown : 'category';
-  const { key, label } = BREAKDOWN[mode];
+  const { key, label, color } = BREAKDOWN[mode];
   setSeg(el.breakdownSeg, mode);
-  const unit = state.period === 'week' ? '지난주' : '지난달';
-  el.breakdownNote.textContent = `▲▼ ${unit} 대비`;
+  el.breakdownNote.textContent = '';
   const cur = sumsByKey(key, from, to);
   const prevPeriod = periodAt(1);
   const prev = sumsByKey(key, prevPeriod.from, prevPeriod.to);
@@ -273,10 +296,22 @@ function renderBreakdown(from, to) {
   const total = keys.reduce((s, k) => s + Math.max(0, cur.get(k) || 0), 0);
   el.catSum.hidden = false;
   el.catList.innerHTML = '';
+  // 비율을 한 줄 막대로 (스크린 타임 스타일)
+  el.stack.innerHTML = '';
+  el.stack.hidden = !total;
+  for (const k of keys) {
+    const v = cur.get(k) || 0;
+    if (v <= 0) continue;
+    const seg = document.createElement('span');
+    seg.style.flex = String(v);
+    seg.style.background = color(k);
+    el.stack.appendChild(seg);
+  }
   if (!keys.length) {
-    el.catList.innerHTML = '<li class="cat-empty">지출 기록이 없습니다</li>';
+    el.catList.innerHTML = '<li class="cat-empty">지출 기록이 없어요</li>';
     return;
   }
+  const prevName = state.period === 'week' ? '지난주' : '지난달';
   for (const k of keys) {
     const v = cur.get(k) || 0;
     const diff = v - (prev.get(k) || 0);
@@ -286,11 +321,11 @@ function renderBreakdown(from, to) {
     li.dataset.key = k;
     const pct = total && v > 0 ? Math.round((v / total) * 100) : 0;
     li.innerHTML = `
-      <span class="cat-name"></span>
-      <span class="cat-pct">${pct ? pct + '%' : ''}</span>
-      <span class="cat-amt">${won(v)}<small class="${diff > 0 ? 'up' : diff < 0 ? 'down' : ''}">${diff > 0 ? '▲' + fmtNum(diff) : diff < 0 ? '▼' + fmtNum(diff) : '변동 없음'}</small></span>
-      <span class="cat-chev">›</span>`;
-    li.querySelector('.cat-name').textContent = label(k);
+      <span class="dot" style="background:${color(k)}"></span>
+      <span class="cat-name"><span></span><small>${pct ? pct + '%' : ''}</small></span>
+      <span class="cat-amt">${won(v)}<small>${diff === 0 ? `${prevName}${state.period === 'week' ? '와' : '과'} 같음` : `${prevName}보다 ${diff > 0 ? '↑' : '↓'}${compactWon(Math.abs(diff))}`}</small></span>
+      <span class="chev">${CHEVRON}</span>`;
+    li.querySelector('.cat-name span').textContent = label(k);
     el.catList.appendChild(li);
     if (open) el.catList.appendChild(renderBreakdownDetail(mode, k, from, to));
   }
@@ -307,19 +342,9 @@ function renderBreakdownDetail(mode, k, from, to) {
     const p = periodAt(n);
     trend.push({ ...p, n, v: sumsByKey(key, p.from, p.to).get(k) || 0 });
   }
-  const max = Math.max(...trend.map(t => t.v), 1);
   const bars = document.createElement('ul');
-  bars.className = 'bars mini-bars';
-  for (const t of trend) {
-    const li = document.createElement('li');
-    li.classList.toggle('cur', t.n === 0);
-    li.innerHTML = `
-      <span class="bar-k"></span>
-      <span class="bar-track"><span class="bar-fill" style="width:${Math.max(0, t.v / max) * 100}%"></span></span>
-      <span class="bar-v">${t.v ? won(t.v) : '-'}</span>`;
-    li.querySelector('.bar-k').textContent = t.label;
-    bars.appendChild(li);
-  }
+  bars.className = 'cols mini-cols';
+  fillColumns(bars, trend, BREAKDOWN[mode].color(k));
   wrap.appendChild(bars);
 
   const items = records
@@ -334,7 +359,7 @@ function renderBreakdownDetail(mode, k, from, to) {
       li.innerHTML = '<span class="cd-date"></span><span class="cd-title"></span><span class="cd-amt"></span>';
       li.children[0].textContent = fmtMD(r.date).replace('월 ', '/').replace('일', '');
       // 결제수단별 보기에서는 어떤 분류였는지 함께 보여 줌
-      const name = mode === 'method' ? `${CATEGORY_EMOJI[r.category] || ''} ${r.title || r.category}`.trim() : r.title || r.method || r.category;
+      const name = mode === 'method' ? `${r.title || r.category} · ${r.category}` : r.title || r.method || r.category;
       li.children[1].textContent = (r.amount < 0 ? '[취소·환불] ' : '') + name;
       li.children[2].textContent = signedWon(recValue(r));
       li.children[2].classList.toggle('income', recValue(r) > 0);
@@ -373,13 +398,14 @@ function periodAt(n) {
   if (state.period === 'week') {
     const day = addDays(d, -7 * n);
     const [from, to] = weekRange(day);
-    return { from, to, day: toKey(day), label: weekName(from).name };
+    const w = weekName(from);
+    return { from, to, day: toKey(day), label: w.name, top: `${w.month}월`, bottom: w.ord.replace(' 주', '') };
   }
   const day = addMonths(d, -n);
   const first = new Date(day.getFullYear(), day.getMonth(), 1);
   const [from, to] = monthRange(first);
-  const label = first.getFullYear() === d.getFullYear() ? `${first.getMonth() + 1}월` : `${String(first.getFullYear()).slice(2)}.${first.getMonth() + 1}월`;
-  return { from, to, day: toKey(day), label };
+  const label = `${first.getMonth() + 1}월`;
+  return { from, to, day: toKey(day), label, top: label, bottom: first.getFullYear() === d.getFullYear() ? '' : `${first.getFullYear()}` };
 }
 
 function spentBetween(from, to) {
@@ -395,26 +421,30 @@ function renderCompare() {
   const rows = [];
   for (let n = COMPARE_COUNT - 1; n >= 0; n--) {
     const p = periodAt(n);
-    rows.push({ ...p, n, spent: spentBetween(p.from, p.to) });
+    rows.push({ ...p, n, v: spentBetween(p.from, p.to) });
   }
-  const cur = rows[rows.length - 1].spent;
-  const prev = rows[rows.length - 2].spent;
-  const delta = cur - prev;
-  el.compareTitle.textContent = `최근 ${COMPARE_COUNT}${unit === '주' ? '주' : '개월'} 나간 돈`;
-  el.compareDiff.textContent = delta === 0 ? `지난${unit}${unit === '주' ? '와' : '과'} 같음` : `지난${unit}보다 ${fmtNum(delta)}원 ${delta > 0 ? '더 씀' : '덜 씀'}`;
+  const delta = rows[rows.length - 1].v - rows[rows.length - 2].v;
+  el.compareTitle.textContent = `최근 ${COMPARE_COUNT}${unit === '주' ? '주' : '개월'}`;
+  el.compareDiff.textContent = delta === 0 ? `지난${unit}${unit === '주' ? '와' : '과'} 같아요` : `지난${unit}보다 ${compactWon(Math.abs(delta))}원 ${delta > 0 ? '더 썼어요' : '덜 썼어요'}`;
   el.compareDiff.className = 'compare-diff ' + (delta > 0 ? 'up' : delta < 0 ? 'down' : '');
-  const max = Math.max(...rows.map(r => r.spent), 1);
-  el.bars.innerHTML = '';
+  fillColumns(el.bars, rows);
+}
+
+// 세로 막대 차트: 금액 / 막대 / 기간 이름 (지금 기간만 강조)
+function fillColumns(ul, rows, color) {
+  const max = Math.max(...rows.map(r => r.v), 1);
+  ul.innerHTML = '';
   for (const r of rows) {
     const li = document.createElement('li');
     li.dataset.day = r.day;
     li.classList.toggle('cur', r.n === 0);
     li.innerHTML = `
-      <span class="bar-k"></span>
-      <span class="bar-track"><span class="bar-fill" style="width:${Math.max(0, r.spent / max) * 100}%"></span></span>
-      <span class="bar-v">${r.spent ? won(r.spent) : '-'}</span>`;
-    li.querySelector('.bar-k').textContent = r.label;
-    el.bars.appendChild(li);
+      <span class="col-v">${r.v ? compactWon(r.v) : ''}</span>
+      <span class="col-track"><span class="col-fill" style="height:${Math.max(r.v > 0 ? 4 : 0, (Math.max(0, r.v) / max) * 100)}%${r.n === 0 && color ? `;background:${color}` : ''}"></span></span>
+      <span class="col-k"><b></b><small></small></span>`;
+    li.querySelector('.col-k b').textContent = r.top;
+    li.querySelector('.col-k small').textContent = r.bottom;
+    ul.appendChild(li);
   }
 }
 
@@ -443,9 +473,9 @@ function renderList() {
   el.recordsTitle.textContent = listTitle;
   let dayIn = 0, dayOut = 0;
   for (const r of items) if (r.type === 'income') dayIn += r.amount; else dayOut += r.amount;
-  el.recordsCount.textContent = items.length
-    ? [dayIn && `수입 ${won(dayIn)}`, dayOut && `지출 ${won(dayOut)}`].filter(Boolean).join(' · ')
-    : '';
+  // 주/월 합계는 위의 큰 숫자에 있으므로 여기서는 건수만
+  el.recordsCount.textContent = !items.length ? '' : multiDay ? `${items.length}건`
+    : [dayIn && `수입 ${won(dayIn)}`, dayOut && `지출 ${won(dayOut)}`].filter(Boolean).join(' · ');
   // 주/월 보기의 기록 목록은 접고 펼 수 있음 (상태 기억)
   const collapsed = multiDay && !settings.listOpen;
   el.recordsHead.classList.toggle('collapsible', multiDay);
@@ -471,21 +501,20 @@ function renderList() {
     const li = document.createElement('li');
     li.dataset.id = r.id;
     const isIn = r.type === 'income';
-    const meta = isIn
-      ? ['수입', r.method].filter(Boolean).join(' · ')
-      : [r.amount < 0 && '취소·환불', r.category, r.method].filter(Boolean).join(' · ');
     const t = new Date(r.createdAt);
+    const time = `${pad(t.getHours())}:${pad(t.getMinutes())}`;
+    const meta = isIn
+      ? ['수입', r.method, time].filter(Boolean).join(' · ')
+      : [r.amount < 0 && '취소·환불', r.category, r.method, time].filter(Boolean).join(' · ');
+    const color = isIn ? INCOME_COLOR : CATEGORY_COLOR[r.category] || '#8E8E93';
     li.innerHTML = `
-      <div class="r-icon">${isIn ? INCOME_EMOJI : CATEGORY_EMOJI[r.category] || '•'}</div>
+      <div class="mono" style="--c:${color}">${(isIn ? '수입' : r.category || '•').slice(0, 1)}</div>
       <div class="r-main">
         <div class="r-title"></div>
         <div class="r-meta"></div>
         ${r.memo ? '<div class="r-memo"></div>' : ''}
       </div>
-      <div class="r-side">
-        <div class="r-time">${pad(t.getHours())}:${pad(t.getMinutes())}</div>
-        <div class="r-amt ${recValue(r) > 0 ? 'income' : ''}">${signedWon(recValue(r))}</div>
-      </div>`;
+      <div class="r-amt ${recValue(r) > 0 ? 'income' : ''}">${signedWon(recValue(r))}</div>`;
     li.querySelector('.r-title').textContent = r.title || (isIn ? '수입' : r.category);
     li.querySelector('.r-meta').textContent = meta;
     if (r.memo) li.querySelector('.r-memo').textContent = r.memo;
@@ -602,7 +631,7 @@ el.memoToggle.addEventListener('click', () => {
 });
 function showMemo(show) {
   el.memo.hidden = !show;
-  el.memoToggle.textContent = show ? '− 메모 닫기' : '+ 메모 추가';
+  el.memoToggle.textContent = show ? '메모 닫기' : '메모 추가';
 }
 
 function resetForm() {
@@ -916,7 +945,7 @@ function buildCategoryChips() {
     const b = document.createElement('button');
     b.type = 'button';
     b.dataset.v = c;
-    b.innerHTML = `<span class="emoji">${CATEGORY_EMOJI[c]}</span>${c}`;
+    b.innerHTML = `<span class="dot" style="background:${CATEGORY_COLOR[c]}"></span>${c}`;
     el.catChips.appendChild(b);
   }
 }

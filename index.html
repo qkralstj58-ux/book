@@ -3,7 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
-  <meta name="theme-color" content="#f2f2f7">
+  <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -13,22 +15,27 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css?v=17">
+  <link rel="stylesheet" href="style.css?v=18">
 </head>
 <body>
   <main class="app">
     <!-- 날짜 -->
-    <header class="date-bar">
-      <button class="icon-btn" id="prevDay" aria-label="이전 날">‹</button>
-      <div class="date-center">
-        <button class="today-btn" id="todayBtn">↩ 오늘로 이동</button>
-        <label class="date-title" id="dateTitle">
-          <span id="dateText"></span>
-          <input type="date" id="datePicker" aria-label="날짜 선택">
-        </label>
+    <header class="top">
+      <div class="top-row">
+        <div class="eyebrow">
+          <span id="eyebrow"></span>
+          <button class="today-btn" id="todayBtn">오늘로</button>
+        </div>
+        <div class="top-actions">
+          <button class="round-btn" id="prevDay" aria-label="이전 날"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+          <button class="round-btn" id="nextDay" aria-label="다음 날"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+          <button class="round-btn" id="settingsBtn" aria-label="설정"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg></button>
+        </div>
       </div>
-      <button class="icon-btn" id="nextDay" aria-label="다음 날">›</button>
-      <button class="icon-btn settings-btn" id="settingsBtn" aria-label="설정">⋯</button>
+      <label class="large-title" id="dateTitle">
+        <span id="dateText"></span>
+        <input type="date" id="datePicker" aria-label="날짜 선택">
+      </label>
     </header>
 
     <!-- 요약 -->
@@ -38,29 +45,30 @@
         <button data-v="week">주</button>
         <button data-v="month">월</button>
       </div>
-      <div class="period-label" id="periodLabel"></div>
-      <div class="sum-grid">
-        <div><span class="sum-k">들어온 돈</span><span class="sum-v income" id="sIn">0원</span></div>
-        <div><span class="sum-k">나간 돈</span><span class="sum-v expense" id="sOut">0원</span></div>
+      <div class="hero">
+        <div class="hero-k">나간 돈</div>
+        <div class="hero-v" id="sOut"></div>
+        <div class="hero-sub">들어온 돈 <b id="sIn"></b></div>
       </div>
       <div class="compare" id="compare" hidden>
         <div class="compare-head">
-          <span id="compareTitle"></span>
+          <span class="sec-k" id="compareTitle"></span>
           <span class="compare-diff" id="compareDiff"></span>
         </div>
-        <ul class="bars" id="bars"></ul>
+        <ul class="cols" id="bars"></ul>
       </div>
     </section>
 
     <!-- 분류별 합계 (주/월) -->
     <section class="card cat-sum" id="catSum" hidden>
       <div class="cat-sum-head">
-        <span>지출 합계 <small id="breakdownNote"></small></span>
+        <span class="sec-k">지출 <small id="breakdownNote"></small></span>
         <div class="segmented mini-seg" id="breakdownSeg">
           <button data-v="category">분류</button>
           <button data-v="method">결제수단</button>
         </div>
       </div>
+      <div class="stack" id="stack"></div>
       <ul class="cat-list" id="catList"></ul>
     </section>
 
@@ -92,11 +100,11 @@
 
 
       <div class="field">
-        <input id="title" class="text-in" type="text" placeholder="제목 (예: 점심, 관리비, 헬스)" autocomplete="off" enterkeyhint="done">
+        <input id="title" class="text-in" type="text" placeholder="무엇에 썼나요?" autocomplete="off" enterkeyhint="done">
       </div>
 
       <div class="field memo-field">
-        <button class="memo-toggle" id="memoToggle">+ 메모 추가</button>
+        <button class="memo-toggle" id="memoToggle">메모 추가</button>
         <textarea id="memo" class="text-in" rows="2" placeholder="메모" hidden></textarea>
       </div>
 
@@ -111,11 +119,11 @@
     <!-- 기록 -->
     <section class="records">
       <div class="records-head" id="recordsHead">
-        <h2><span id="recordsTitle">오늘의 기록</span><span class="rh-chev">›</span></h2>
+        <h2><span id="recordsTitle">오늘의 기록</span><span class="rh-chev"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></span></h2>
         <span id="recordsCount"></span>
       </div>
       <ul class="list" id="list"></ul>
-      <p class="empty" id="empty">아직 기록이 없습니다</p>
+      <p class="empty" id="empty">아직 기록이 없어요</p>
     </section>
   </main>
 
@@ -177,6 +185,6 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="app.js?v=17"></script>
+  <script src="app.js?v=18"></script>
 </body>
 </html>
