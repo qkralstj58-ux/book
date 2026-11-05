@@ -15,7 +15,7 @@
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css?v=20">
+  <link rel="stylesheet" href="style.css?v=21">
 </head>
 <body>
   <main class="app">
@@ -94,7 +94,7 @@
       </div>
 
       <div class="field expense-only">
-        <div class="field-k">분류</div>
+        <div class="field-k">분류 <button type="button" class="edit-link" id="editCats">편집</button></div>
         <div class="chips cats" id="catChips"></div>
       </div>
 
@@ -151,6 +151,13 @@
         <button class="link-btn" data-close>완료</button>
       </div>
       <div class="panel-body">
+        <div class="panel-sec-title">분류 <span>색 점을 누르면 색이 바뀝니다</span></div>
+        <ul class="method-list" id="categoryList"></ul>
+        <form class="method-add" data-type="category">
+          <input class="text-in" type="text" placeholder="새 분류 이름" autocomplete="off">
+          <button class="small-btn" type="submit">추가</button>
+        </form>
+
         <div class="panel-sec-title">결제수단 (지출)</div>
         <ul class="method-list" id="methodList"></ul>
         <form class="method-add" data-type="expense">
@@ -185,6 +192,6 @@
 
   <div class="toast" id="toast"></div>
 
-  <script src="app.js?v=20"></script>
+  <script src="app.js?v=21"></script>
 </body>
 </html>

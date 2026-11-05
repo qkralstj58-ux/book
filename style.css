@@ -252,7 +252,8 @@ body.negative .won .minus { display: inline; }
 body.negative .won, body.negative #amount { color: var(--red); }
 
 .field { margin-top: 18px; }
-.field-k { font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 8px; }
+.field-k { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 8px; }
+.edit-link { font-size: 13px; font-weight: 500; color: var(--accent); padding: 2px 4px; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .chips button {
@@ -385,6 +386,9 @@ body.income-mode .expense-only { display: none; }
 .link-btn { color: var(--accent); font-weight: 600; font-size: 17px; padding: 4px; }
 .panel-body { overflow-y: auto; padding: 0 16px calc(env(safe-area-inset-bottom) + 24px); }
 .panel-sec-title { font-size: 13px; color: var(--text-2); margin: 22px 16px 7px; }
+.panel-sec-title span { color: var(--text-3); margin-left: 4px; }
+.color-dot { width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0; margin-left: 6px; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .35); }
+.color-dot:active { transform: scale(.85); }
 .method-list { list-style: none; margin: 0; padding: 0; background: var(--card); border-radius: 12px; overflow: hidden; }
 .method-list li { display: flex; align-items: center; gap: 6px; padding: 4px 8px 4px 8px; }
 .method-list li + li { border-top: .5px solid var(--line); }

@@ -1,6 +1,6 @@
 'use strict';
 
-const CATEGORIES = ['식비', '교통', '주거', '쇼핑', '여가', '금융', '경조사', '업무', '고정비'];
+const DEFAULT_CATEGORIES = ['식비', '교통', '주거', '쇼핑', '여가', '금융', '경조사', '업무', '고정비'];
 // 분류별 색 (애플 시스템 색상 계열)
 const CATEGORY_COLOR = {
   식비: '#FF9500', 교통: '#007AFF', 주거: '#A2845E', 쇼핑: '#FF2D55', 여가: '#AF52DE',
@@ -8,7 +8,8 @@ const CATEGORY_COLOR = {
 };
 const INCOME_COLOR = '#34C759';
 const METHOD_COLORS = ['#0A84FF', '#34C759', '#FF9500', '#AF52DE', '#FF2D55', '#30B0C7', '#8E8E93'];
-const DEFAULT_CATEGORY = '식비';
+// 새로 만든 분류에 차례로 쓰는 색
+const CATEGORY_PALETTE = ['#FF9500', '#007AFF', '#34C759', '#FF2D55', '#AF52DE', '#5856D6', '#30B0C7', '#FFCC00', '#FF3B30', '#A2845E', '#00C7BE', '#8E8E93'];
 const DEFAULT_METHODS = {
   expense: ['현대카드', '농협카드', '계좌', '현금·기타'],
   income: ['농협계좌', '현금·기타'],
@@ -102,10 +103,15 @@ function loadSettings() {
       income: list(m && m.income) || DEFAULT_METHODS.income.slice(),
     },
     lastMethod: s.lastMethod || {},
+    categories: list(s.categories) || DEFAULT_CATEGORIES.slice(),
+    categoryColors: s.categoryColors || {},
     breakdown: s.breakdown === 'method' ? 'method' : 'category',
     listOpen: s.listOpen === true,
   };
 }
+const catColor = name => settings.categoryColors[name] || CATEGORY_COLOR[name] || '#8E8E93';
+const defaultCategory = () => (settings.categories.includes('식비') ? '식비' : settings.categories[0]);
+
 function saveSettings() {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {}
 }
@@ -167,7 +173,7 @@ const state = {
   date: todayKey(),
   period: 'day',
   type: 'expense',
-  category: DEFAULT_CATEGORY,
+  category: defaultCategory(),
   method: null,
   negative: false,
   openKey: null,
@@ -188,7 +194,8 @@ const el = {
   editBanner: $('editBanner'), cancelEdit: $('cancelEdit'),
   recordsTitle: $('recordsTitle'), recordsCount: $('recordsCount'), list: $('list'), empty: $('empty'),
   actionSheet: $('actionSheet'), sheetInfo: $('sheetInfo'), sheetEdit: $('sheetEdit'), sheetDelete: $('sheetDelete'),
-  settings: $('settings'), methodLists: { expense: $('methodList'), income: $('incomeMethodList') },
+  settings: $('settings'), editLists: { category: $('categoryList'), expense: $('methodList'), income: $('incomeMethodList') },
+  editCats: $('editCats'),
   exportBtn: $('exportBtn'), importBtn: $('importBtn'), importFile: $('importFile'), dataInfo: $('dataInfo'),
   updateBtn: $('updateBtn'),
   toast: $('toast'),
@@ -264,7 +271,7 @@ function renderSummary() {
 
 // 분류별 / 결제수단별 지출 합계 (주/월 보기)
 const BREAKDOWN = {
-  category: { key: r => r.category || '', label: k => k || '기타', color: k => CATEGORY_COLOR[k] || '#8E8E93' },
+  category: { key: r => r.category || '', label: k => k || '기타', color: k => catColor(k) },
   method: {
     key: r => r.method || '', label: k => k || '미지정',
     color: k => { const i = [...settings.methods.expense, ...settings.methods.income].indexOf(k); return METHOD_COLORS[(i < 0 ? 6 : i) % METHOD_COLORS.length]; },
@@ -506,7 +513,7 @@ function renderList() {
     const meta = isIn
       ? ['수입', r.method, time].filter(Boolean).join(' · ')
       : [r.amount < 0 && '취소·환불', r.category, r.method, time].filter(Boolean).join(' · ');
-    const color = isIn ? INCOME_COLOR : CATEGORY_COLOR[r.category] || '#8E8E93';
+    const color = isIn ? INCOME_COLOR : catColor(r.category);
     li.innerHTML = `
       <div class="mono" style="--c:${color}">${(isIn ? '수입' : r.category || '•').slice(0, 1)}</div>
       <div class="r-main">
@@ -527,7 +534,7 @@ function renderList() {
 function renderForm() {
   document.body.classList.toggle('income-mode', state.type === 'income');
   setSeg(el.typeSeg, state.type);
-  for (const b of el.catChips.children) b.classList.toggle('on', b.dataset.v === state.category);
+  renderCategoryChips();
   if (state.type === 'income') state.negative = false;
   document.body.classList.toggle('negative', state.negative);
   el.signBtn.setAttribute('aria-pressed', String(state.negative));
@@ -636,7 +643,7 @@ function showMemo(show) {
 
 function resetForm() {
   state.editingId = null;
-  state.category = DEFAULT_CATEGORY;
+  state.category = defaultCategory();
   setAmount(0);
   el.title.value = '';
   el.memo.value = '';
@@ -816,7 +823,7 @@ el.sheetEdit.addEventListener('click', () => {
   }
   state.editingId = r.id;
   state.type = r.type;
-  state.category = r.category || DEFAULT_CATEGORY;
+  state.category = r.category || defaultCategory();
   state.method = r.method;
   if (r.method && !settings.methods[r.type].includes(r.method)) {
     // 삭제된 결제수단이면 목록에 다시 추가해 보존
@@ -854,29 +861,49 @@ document.querySelectorAll('.sheet-wrap').forEach(s => {
 
 /* ---------- 설정 ---------- */
 
+// 입력란의 '편집'에서 바로 분류 설정으로
+el.editCats.addEventListener('click', () => {
+  renderSettings();
+  openSheet(el.settings);
+});
+
 $('settingsBtn').addEventListener('click', () => {
   renderSettings();
   openSheet(el.settings);
 });
 
 function renderSettings() {
-  for (const type of ['expense', 'income']) renderMethodList(type);
+  for (const kind of ['category', 'expense', 'income']) renderEditableList(kind);
   el.dataInfo.textContent = `저장된 기록 ${records.length.toLocaleString('ko-KR')}건 · 앱 버전 ${APP_VERSION}`;
 }
 
-function renderMethodList(type) {
-  const list = settings.methods[type];
-  const ul = el.methodLists[type];
+// 설정에서 고칠 수 있는 목록: 분류, 결제수단(지출), 입금수단(수입)
+const listOf = kind => (kind === 'category' ? settings.categories : settings.methods[kind]);
+
+function renderEditableList(kind) {
+  const list = listOf(kind);
+  const ul = el.editLists[kind];
   ul.innerHTML = '';
   list.forEach((m, i) => {
     const li = document.createElement('li');
     li.innerHTML = `
+      ${kind === 'category' ? '<button class="color-dot" data-act="color" aria-label="색 바꾸기"></button>' : ''}
       <input type="text" aria-label="이름">
       <button class="mini" data-act="up" aria-label="위로" ${i === 0 ? 'disabled' : ''}>↑</button>
       <button class="mini del" data-act="del" aria-label="삭제">✕</button>`;
     const input = li.querySelector('input');
     input.value = m;
-    input.addEventListener('change', () => renameMethod(type, i, input.value));
+    input.addEventListener('change', () => renameItem(kind, i, input.value));
+    if (kind === 'category') {
+      const dot = li.querySelector('[data-act=color]');
+      dot.style.background = catColor(m);
+      // 누를 때마다 다음 색으로
+      dot.addEventListener('click', () => {
+        const next = CATEGORY_PALETTE[(CATEGORY_PALETTE.indexOf(catColor(m)) + 1) % CATEGORY_PALETTE.length];
+        settings.categoryColors[m] = next;
+        saveSettings(); renderSettings(); render();
+      });
+    }
     li.querySelector('[data-act=up]').addEventListener('click', () => {
       [list[i - 1], list[i]] = [list[i], list[i - 1]];
       saveSettings(); renderSettings(); renderForm();
@@ -891,18 +918,29 @@ function renderMethodList(type) {
   });
 }
 
-async function renameMethod(type, i, name) {
-  const list = settings.methods[type];
+async function renameItem(kind, i, name) {
+  const list = listOf(kind);
   name = name.trim();
   const old = list[i];
   if (!name || name === old) { renderSettings(); return; }
   if (list.includes(name)) { toast('이미 있는 이름입니다'); renderSettings(); return; }
   list[i] = name;
-  if (settings.lastMethod[type] === old) settings.lastMethod[type] = name;
-  if (state.type === type && state.method === old) state.method = name;
+  let field, match;
+  if (kind === 'category') {
+    settings.categoryColors[name] = catColor(old);
+    delete settings.categoryColors[old];
+    if (state.category === old) state.category = name;
+    field = 'category';
+    match = r => r.type === 'expense' && r.category === old;
+  } else {
+    if (settings.lastMethod[kind] === old) settings.lastMethod[kind] = name;
+    if (state.type === kind && state.method === old) state.method = name;
+    field = 'method';
+    match = r => r.type === kind && r.method === old;
+  }
   saveSettings();
-  // 기존 기록의 결제수단 이름도 함께 변경
-  const changed = records.filter(r => r.type === type && r.method === old).map(r => ({ ...r, method: name }));
+  // 기존 기록의 이름도 함께 변경
+  const changed = records.filter(match).map(r => ({ ...r, [field]: name }));
   if (changed.length) {
     await store.putMany(changed);
     const map = new Map(changed.map(r => [r.id, r]));
@@ -915,12 +953,18 @@ async function renameMethod(type, i, name) {
 document.querySelectorAll('.method-add').forEach(form => {
   form.addEventListener('submit', e => {
     e.preventDefault();
-    const list = settings.methods[form.dataset.type];
+    const kind = form.dataset.type;
+    const list = listOf(kind);
     const input = form.querySelector('input');
     const name = input.value.trim();
     if (!name) return;
     if (list.includes(name)) { toast('이미 있는 이름입니다'); return; }
     list.push(name);
+    if (kind === 'category' && !settings.categoryColors[name] && !CATEGORY_COLOR[name]) {
+      // 아직 안 쓴 색부터 배정
+      const used = new Set(settings.categories.map(catColor));
+      settings.categoryColors[name] = CATEGORY_PALETTE.find(c => !used.has(c)) || CATEGORY_PALETTE[list.length % CATEGORY_PALETTE.length];
+    }
     input.value = '';
     saveSettings(); renderSettings(); renderForm();
   });
@@ -962,10 +1006,11 @@ el.importFile.addEventListener('change', async () => {
       });
     if (!confirm(`${valid.length}건의 기록을 가져올까요?\n같은 기록은 덮어쓰고, 나머지는 추가됩니다.`)) return;
     await store.putMany(valid);
-    // 가져온 기록에 쓰인 결제수단이 목록에 없으면 추가
+    // 가져온 기록에 쓰인 결제수단·분류가 목록에 없으면 추가
     for (const r of valid) {
       const list = settings.methods[r.type];
       if (r.method && !list.includes(r.method)) list.push(r.method);
+      if (r.type === 'expense' && r.category && !settings.categories.includes(r.category)) settings.categories.push(r.category);
     }
     saveSettings();
     records = await store.all();
@@ -999,12 +1044,19 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-function buildCategoryChips() {
-  for (const c of CATEGORIES) {
+// 분류 버튼: 목록에서 지운 분류의 기록을 수정할 때는 그 분류도 잠시 함께 보여 줌
+function renderCategoryChips() {
+  if (!state.editingId && !settings.categories.includes(state.category)) state.category = defaultCategory();
+  const list = settings.categories.includes(state.category) ? settings.categories : [...settings.categories, state.category];
+  el.catChips.innerHTML = '';
+  for (const c of list) {
     const b = document.createElement('button');
     b.type = 'button';
     b.dataset.v = c;
-    b.innerHTML = `<span class="dot" style="background:${CATEGORY_COLOR[c]}"></span>${c}`;
+    b.innerHTML = '<span class="dot"></span>';
+    b.firstChild.style.background = catColor(c);
+    b.append(c);
+    b.classList.toggle('on', c === state.category);
     el.catChips.appendChild(b);
   }
 }
@@ -1049,7 +1101,6 @@ el.updateBtn.addEventListener('click', async () => {
 });
 
 async function init() {
-  buildCategoryChips();
   state.method = defaultMethod(state.type);
   try { records = await store.all(); } catch (e) { records = []; }
   render();

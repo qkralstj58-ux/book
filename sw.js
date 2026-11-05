@@ -1,5 +1,5 @@
 // 앱 파일을 바꾸면 VERSION과 index.html의 ?v= 숫자를 함께 올립니다.
-const VERSION = 'ledger-v20';
+const VERSION = 'ledger-v21';
 const ASSETS = [
   './',
   'index.html',
